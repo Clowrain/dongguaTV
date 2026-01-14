@@ -129,6 +129,7 @@
 
     <!-- 非关键脚本 (延迟加载) -->
     <script data-cfasync="false" src="libs/js/hls.min.js" defer></script>
+    <script data-cfasync="false" src="libs/js/ad-filter.js" defer></script>
     <script data-cfasync="false" src="libs/js/DPlayer.min.js" defer></script>
     <script data-cfasync="false" src="libs/js/bootstrap.bundle.min.js" defer></script>
 
@@ -2163,6 +2164,44 @@
             padding-bottom: 20px;
         }
 
+        /* TV 模式切换按钮 - 隐蔽但美观 */
+        .tv-mode-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            margin-bottom: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            color: #666;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            user-select: none;
+        }
+
+        .tv-mode-toggle:hover {
+            background: rgba(229, 9, 20, 0.15);
+            border-color: rgba(229, 9, 20, 0.3);
+            color: #e50914;
+        }
+
+        .tv-mode-toggle.active {
+            background: linear-gradient(135deg, rgba(229, 9, 20, 0.2), rgba(229, 9, 20, 0.1));
+            border-color: rgba(229, 9, 20, 0.5);
+            color: #e50914;
+            box-shadow: 0 0 15px rgba(229, 9, 20, 0.2);
+        }
+
+        .tv-mode-toggle.active i {
+            text-shadow: 0 0 8px rgba(229, 9, 20, 0.6);
+        }
+
+        .tv-mode-toggle i {
+            font-size: 12px;
+        }
+
         /* 电影详情弹窗 */
         .info-modal-overlay {
             position: fixed;
@@ -2937,6 +2976,12 @@
         </div>
 
         <div class="footer">
+            <!-- TV 模式切换入口 -->
+            <div class="tv-mode-toggle" @click="toggleTVMode" :title="isTVMode ? '当前：TV模式（点击关闭）' : '切换到TV模式（遥控器导航）'"
+                :class="{ active: isTVMode }">
+                <i class="fas fa-tv"></i>
+                <span v-if="isTVMode">TV</span>
+            </div>
             <!-- 隐藏的退出登录按钮：连续点击3次退出 -->
             <div style="font-size:10px; margin-top:5px; opacity:0.5; cursor: default; user-select: none;"
                 @click="handleFooterClick" :title="footerClickCount >= 2 ? '再点击1次退出登录' : ''">
@@ -3360,10 +3405,10 @@
                     autoRetryMessage: '',  // 自动切换提示信息
                     watchHistory: [],  // 用户观看历史记录
 
-                    // 📺 TV 模式检测 - 通过 User Agent 或屏幕尺寸判断
-                    // 也支持 URL 参数 ?tv=1 或 localStorage 强制启用
+                    // 📺 TV 模式检测
+                    // 支持 URL 参数 ?tv=1 手动开启，或智能 TV 浏览器自动检测
                     isTVMode: (function () {
-                        // 1. 检查 URL 参数 ?tv=1
+                        // 1. 检查 URL 参数 ?tv=1 手动开启
                         const urlParams = new URLSearchParams(window.location.search);
                         if (urlParams.get('tv') === '1') {
                             try { localStorage.setItem('force_tv_mode', '1'); } catch (e) { }
@@ -3379,20 +3424,24 @@
                             if (localStorage.getItem('force_tv_mode') === '1') return true;
                         } catch (e) { }
 
-                        // 3. 自动检测
+                        // 3. 智能 TV 浏览器 UA 检测（用户通过 TV 内置浏览器访问网页版）
                         const ua = navigator.userAgent.toLowerCase();
-                        // 添加 sabrina = Chromecast with Google TV
-                        const tvKeywords = ['android tv', 'googletv', 'aftt', 'aftm', 'aftb', 'firetv', 'chromecast', 'roku', 'smarttv', 'tizen', 'webos', 'leanback', 'sabrina', 'boreal'];
+                        const tvKeywords = [
+                            'android tv', 'googletv',           // Android TV / Google TV
+                            'aftt', 'aftm', 'aftb', 'firetv',   // Amazon Fire TV
+                            'chromecast', 'sabrina', 'boreal',  // Chromecast with Google TV
+                            'roku',                              // Roku
+                            'smarttv', 'smart-tv',               // 通用 Smart TV
+                            'tizen',                             // Samsung TV
+                            'webos', 'web0s',                    // LG TV
+                            'leanback'                           // Android TV Leanback
+                        ];
                         const isTVUA = tvKeywords.some(k => ua.includes(k));
-                        const isBigScreen = window.screen.width >= 1280 && window.screen.height >= 720;
-                        const isNoTouch = !('ontouchstart' in window) || navigator.maxTouchPoints === 0;
-                        const isGecko = ua.includes('gecko/') && ua.includes('firefox/');
-                        // Capacitor 原生 + 大屏幕 + 非触摸 = 可能是 TV
-                        const isCapacitorTV = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() && isBigScreen && isNoTouch;
 
-                        const result = isTVUA || isGecko || isCapacitorTV;
-                        console.log('[TV 检测]', { isTVUA, isBigScreen, isNoTouch, isGecko, isCapacitorTV, result, ua: ua.substring(0, 100) });
-                        return result;
+                        if (isTVUA) {
+                            console.log('[TV 检测] ✅ 检测到智能 TV 浏览器:', ua.substring(0, 100));
+                        }
+                        return isTVUA;
                     })(),
                     historyExpanded: false,  // 观看历史展开状态
                     historyCanScrollLeft: false,  // 可以向左滚动
@@ -4186,6 +4235,48 @@
                         // 刷新页面显示密码输入框
                         window.location.reload();
                     }
+                },
+
+                // TV 模式切换
+                toggleTVMode() {
+                    const newMode = !this.isTVMode;
+                    try {
+                        if (newMode) {
+                            localStorage.setItem('force_tv_mode', '1');
+                        } else {
+                            localStorage.removeItem('force_tv_mode');
+                        }
+                    } catch (e) { }
+
+                    // 显示提示
+                    const message = newMode
+                        ? '📺 已开启 TV 模式，页面即将刷新...'
+                        : '📱 已关闭 TV 模式，页面即将刷新...';
+
+                    // 创建美观的提示
+                    const toast = document.createElement('div');
+                    toast.style.cssText = `
+                        position: fixed;
+                        top: 50%;
+                        left: 50%;
+                        transform: translate(-50%, -50%);
+                        background: rgba(0, 0, 0, 0.9);
+                        color: #fff;
+                        padding: 20px 30px;
+                        border-radius: 12px;
+                        font-size: 16px;
+                        z-index: 999999;
+                        text-align: center;
+                        box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+                        border: 1px solid rgba(229, 9, 20, 0.3);
+                    `;
+                    toast.innerHTML = message;
+                    document.body.appendChild(toast);
+
+                    // 延迟刷新以便用户看到提示
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 800);
                 },
 
                 // 页脚隐蔽退出（连续点击3次触发）
