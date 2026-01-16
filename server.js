@@ -876,14 +876,9 @@ app.get('/api/tmdb-proxy', async (req, res) => {
 
     try {
         // 获取用户 IP 并判断是否来自中国大陆
-        const clientIP = getClientIP(req);
         const TMDB_PROXY_URL = process.env['TMDB_PROXY_URL'];
 
-        // 只有配置了代理 URL 且用户来自中国大陆时，才使用代理
-        let useProxy = false;
-        if (TMDB_PROXY_URL) {
-            useProxy = await isChineseIP(clientIP);
-        }
+        let useProxy = true;
 
         const TMDB_BASE = useProxy
             ? `${TMDB_PROXY_URL.replace(/\/$/, '')}/api/3`  // 代理需要 /api/3 前缀
