@@ -1,0 +1,59 @@
+name: donggua_tv
+description: "E视界 - 流媒体聚合播放器 Flutter 客户端"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.8.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # UI
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.2.1
+  shimmer: ^3.0.0
+  cached_network_image: ^3.4.1
+  flutter_svg: ^2.0.10+1
+
+  # State Management
+  flutter_bloc: ^8.1.6
+  equatable: ^2.0.7
+
+  # Network
+  dio: ^5.6.0
+
+  # Local Storage
+  hive_flutter: ^1.1.0
+  shared_preferences: ^2.3.2
+
+  # Video Player
+  media_kit: ^1.1.11
+  media_kit_video: ^1.2.5
+  media_kit_libs_video: ^1.0.5
+
+  # Routing
+  go_router: ^14.3.0
+
+  # Utils
+  json_annotation: ^4.9.0
+  intl: ^0.19.0
+  logger: ^2.4.0
+  connectivity_plus: ^6.0.5
+  flutter_screenutil: ^5.9.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  build_runner: ^2.4.12
+  json_serializable: ^6.8.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/icons/
+
