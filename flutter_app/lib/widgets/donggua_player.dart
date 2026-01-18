@@ -30,6 +30,12 @@ class DongguaPlayer extends StatefulWidget {
   
   /// 视频结束回调
   final VoidCallback? onVideoEnd;
+  
+  /// 手势开始时回调（父级应禁用滚动）
+  final VoidCallback? onGestureStart;
+  
+  /// 手势结束时回调（父级应恢复滚动）
+  final VoidCallback? onGestureEnd;
 
   const DongguaPlayer({
     super.key,
@@ -41,6 +47,8 @@ class DongguaPlayer extends StatefulWidget {
     this.onBack,
     this.onMoreOptions,
     this.onVideoEnd,
+    this.onGestureStart,
+    this.onGestureEnd,
   });
 
   @override
@@ -208,6 +216,8 @@ class DongguaPlayerState extends State<DongguaPlayer> {
                 progressBarSettings: FlickProgressBarSettings(
                   height: 4,
                 ),
+                onGestureStart: widget.onGestureStart,
+                onGestureEnd: widget.onGestureEnd,
               ),
             ),
             flickVideoWithControlsFullscreen: FlickVideoWithControls(
@@ -215,6 +225,8 @@ class DongguaPlayerState extends State<DongguaPlayer> {
               controls: DongguaLandscapeControls(
                 title: widget.title,
                 episodeName: widget.episodeName,
+                onGestureStart: widget.onGestureStart,
+                onGestureEnd: widget.onGestureEnd,
               ),
             ),
           ),

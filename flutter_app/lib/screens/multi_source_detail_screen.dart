@@ -351,46 +351,73 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final statusBarHeight = MediaQuery.of(context).padding.top;
+    
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
-      body: CustomScrollView(
-        slivers: [
-          // 顶部海报
-          _buildHeader(),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          // 计算播放器高度（16:9）但不超过可用高度的60%
+          final screenWidth = constraints.maxWidth;
+          final screenHeight = constraints.maxHeight;
+          final isLandscape = screenWidth > screenHeight;
           
-          // 标题和元信息
-          SliverToBoxAdapter(
-            child: _buildTitleSection(),
-          ),
+          // 横屏时播放器可以占用更多空间，竖屏时限制高度
+          final maxPlayerHeight = isLandscape 
+              ? screenHeight - statusBarHeight  // 横屏时占满
+              : (screenHeight - statusBarHeight) * 0.4;  // 竖屏时最多40%
+          final playerHeight16x9 = screenWidth * 9 / 16;
+          final playerHeight = playerHeight16x9.clamp(0.0, maxPlayerHeight);
           
-          // 简介
-          if (_currentDetail != null && _currentDetail!.vodContent.isNotEmpty)
-            SliverToBoxAdapter(
-              child: _buildSynopsis(),
-            ),
-          
-          // 线路选择
-          SliverToBoxAdapter(
-            child: _buildSourceSelector(),
-          ),
-          
-          // 剧集列表
-          if (_currentDetail != null && _currentDetail!.playSources.isNotEmpty)
-            SliverToBoxAdapter(
-              child: _buildEpisodeGrid(),
-            ),
-          
-          // 底部间距
-          const SliverToBoxAdapter(
-            child: SizedBox(height: 100),
-          ),
-        ],
+          return Column(
+            children: [
+              // 状态栏填充
+              Container(
+                color: Colors.black,
+                height: statusBarHeight,
+              ),
+              
+              // 播放器固定在顶部 - 高度受限
+              SizedBox(
+                height: playerHeight,
+                child: _buildPlayer(),
+              ),
+              
+              // 下方内容可滚动（横屏时隐藏）
+              if (!isLandscape)
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        // 标题和元信息
+                        _buildTitleSection(),
+                        
+                        // 简介
+                        if (_currentDetail != null && _currentDetail!.vodContent.isNotEmpty)
+                          _buildSynopsis(),
+                        
+                        // 线路选择
+                        _buildSourceSelector(),
+                        
+                        // 剧集列表
+                        if (_currentDetail != null && _currentDetail!.playSources.isNotEmpty)
+                          _buildEpisodeGrid(),
+                        
+                        // 底部间距
+                        const SizedBox(height: 100),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
-
-  /// 顶部播放器/海报区域
-  Widget _buildHeader() {
+  
+  /// 播放器组件（固定在顶部）
+  Widget _buildPlayer() {
     // 获取当前剧集名称
     String episodeName = '';
     bool hasNext = false;
@@ -402,26 +429,14 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
       }
     }
     
-    return SliverToBoxAdapter(
-      child: Column(
-        children: [
-          // 安全区域 padding
-          Container(
-            color: Colors.black,
-            height: MediaQuery.of(context).padding.top,
-          ),
-          // 播放器
-          DongguaPlayer(
-            key: _playerKey,
-            videoUrl: _currentVideoUrl,
-            title: widget.vodName,
-            episodeName: episodeName,
-            hasNextEpisode: hasNext,
-            onNextEpisode: _playNextEpisode,
-            onBack: () => Navigator.of(context).pop(),
-          ),
-        ],
-      ),
+    return DongguaPlayer(
+      key: _playerKey,
+      videoUrl: _currentVideoUrl,
+      title: widget.vodName,
+      episodeName: episodeName,
+      hasNextEpisode: hasNext,
+      onNextEpisode: _playNextEpisode,
+      onBack: () => Navigator.of(context).pop(),
     );
   }
   

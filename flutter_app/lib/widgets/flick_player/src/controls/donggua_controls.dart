@@ -29,6 +29,9 @@ class DongguaPortraitControls extends StatelessWidget {
     this.centerSlot,
     this.bottomSlot,
     this.overlaySlot,
+    // 手势回调
+    this.onGestureStart,
+    this.onGestureEnd,
   });
 
   final double iconSize;
@@ -53,6 +56,12 @@ class DongguaPortraitControls extends StatelessWidget {
   
   /// 浮层插槽（弹幕、字幕等）
   final Widget? overlaySlot;
+  
+  /// 手势开始时回调（父级应禁用滚动）
+  final VoidCallback? onGestureStart;
+  
+  /// 手势结束时回调（父级应恢复滚动）
+  final VoidCallback? onGestureEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -76,6 +85,8 @@ class DongguaPortraitControls extends StatelessWidget {
         // 中间播放控制 - 使用统一的手势处理
         Positioned.fill(
           child: DongguaVideoAction(
+            onGestureStart: onGestureStart,
+            onGestureEnd: onGestureEnd,
             child: Center(
               child: FlickVideoBuffer(
                 child: FlickAutoHideChild(
@@ -127,11 +138,26 @@ class DongguaPortraitControls extends StatelessWidget {
             ),
           ),
         ),
-        // 底部控制栏
-        Positioned.fill(
+        // 底部控制栏 - 带渐变遮罩
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
           child: FlickAutoHideChild(
-            child: Padding(
-              padding: const EdgeInsets.all(10.0),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [
+                    Colors.black.withAlpha(180),
+                    Colors.black.withAlpha(100),
+                    Colors.transparent,
+                  ],
+                  stops: const [0.0, 0.7, 1.0],
+                ),
+              ),
+              padding: const EdgeInsets.fromLTRB(10, 30, 10, 10),
               child: bottomSlot ?? Column(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: <Widget>[
@@ -183,11 +209,19 @@ class DongguaLandscapeControls extends StatelessWidget {
     this.title = '',
     this.episodeName = '',
     this.onBack,
+    this.onGestureStart,
+    this.onGestureEnd,
   });
 
   final String title;
   final String episodeName;
   final VoidCallback? onBack;
+  
+  /// 手势开始时回调
+  final VoidCallback? onGestureStart;
+  
+  /// 手势结束时回调
+  final VoidCallback? onGestureEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -196,6 +230,8 @@ class DongguaLandscapeControls extends StatelessWidget {
         // 中间播放控制 - 使用统一的手势处理
         Positioned.fill(
           child: DongguaVideoAction(
+            onGestureStart: onGestureStart,
+            onGestureEnd: onGestureEnd,
             child: Center(
               child: FlickVideoBuffer(
                 child: FlickAutoHideChild(
@@ -278,14 +314,30 @@ class DongguaLandscapeControls extends StatelessWidget {
             ),
           ),
         ),
-        // 底部控制栏
-        Positioned.fill(
+        // 底部控制栏 - 带渐变遮罩
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
           child: FlickAutoHideChild(
-            child: Padding(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [
+                    Colors.black.withAlpha(180),
+                    Colors.black.withAlpha(100),
+                    Colors.transparent,
+                  ],
+                  stops: const [0.0, 0.7, 1.0],
+                ),
+              ),
               padding: EdgeInsets.only(
-                left: MediaQuery.of(context).padding.left + 16, // 适配左侧刘海
-                right: MediaQuery.of(context).padding.right + 16, // 适配右侧刘海
+                left: MediaQuery.of(context).padding.left + 16,
+                right: MediaQuery.of(context).padding.right + 16,
                 bottom: MediaQuery.of(context).padding.bottom + 10,
+                top: 30,
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.end,
