@@ -73,16 +73,14 @@ class DongguaPortraitControls extends StatelessWidget {
         if (overlaySlot != null)
           Positioned.fill(child: overlaySlot!),
           
-        // 中间播放控制
+        // 中间播放控制 - 使用统一的手势处理
         Positioned.fill(
-          child: FlickShowControlsAction(
-            child: FlickSeekVideoAction(
-              child: Center(
-                child: FlickVideoBuffer(
-                  child: FlickAutoHideChild(
-                    showIfVideoNotInitialized: false,
-                    child: centerSlot ?? defaultCenterControl,
-                  ),
+          child: DongguaVideoAction(
+            child: Center(
+              child: FlickVideoBuffer(
+                child: FlickAutoHideChild(
+                  showIfVideoNotInitialized: false,
+                  child: centerSlot ?? defaultCenterControl,
                 ),
               ),
             ),
