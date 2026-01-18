@@ -42,6 +42,11 @@ dependencies:
   logger: ^2.4.0
   connectivity_plus: ^6.0.5
   flutter_screenutil: ^5.9.3
+  screen_brightness: ^2.1.7
+  provider: ^6.1.5+1
+  video_player: ^2.10.1
+  wakelock_plus: ^1.4.0
+  universal_html: ^2.3.0
 
 dev_dependencies:
   flutter_test:

@@ -145,9 +145,41 @@ class ApiService {
 
       final stream = response.data.stream as Stream<List<int>>;
       String buffer = '';
+      List<int> byteBuffer = []; // 用于累积不完整的字节
 
       await for (final chunk in stream) {
-        buffer += utf8.decode(chunk);
+        // 累积字节
+        byteBuffer.addAll(chunk);
+        
+        // 尝试解码，允许不完整的序列
+        String decoded = '';
+        try {
+          decoded = utf8.decode(byteBuffer);
+          byteBuffer.clear(); // 成功解码后清空
+        } catch (e) {
+          // 如果解码失败，尝试找到最后一个完整的 UTF-8 字符位置
+          bool found = false;
+          for (int validEnd = byteBuffer.length; validEnd > 0; validEnd--) {
+            try {
+              decoded = utf8.decode(byteBuffer.sublist(0, validEnd));
+              // 解码成功，保留剩余字节
+              final remaining = byteBuffer.sublist(validEnd);
+              byteBuffer.clear();
+              byteBuffer.addAll(remaining);
+              found = true;
+              break;
+            } catch (_) {
+              // 继续尝试更短的长度
+            }
+          }
+          if (!found) {
+            // 如果整个 buffer 都无法解码，使用 allowMalformed
+            decoded = utf8.decode(byteBuffer, allowMalformed: true);
+            byteBuffer.clear();
+          }
+        }
+        
+        buffer += decoded;
         
         // 解析 SSE 数据
         final lines = buffer.split('\n');
@@ -168,6 +200,7 @@ class ApiService {
               }
             } catch (e) {
               _logger.w('Parse SSE data error: $e');
+              // 继续处理下一行，不中断流
             }
           } else if (line.startsWith('event: done')) {
             // 搜索完成
@@ -177,7 +210,7 @@ class ApiService {
       }
     } catch (e) {
       _logger.e('searchStream error: $e');
-      rethrow;
+      // 不再 rethrow，让 SearchBloc 能处理部分结果
     }
   }
 

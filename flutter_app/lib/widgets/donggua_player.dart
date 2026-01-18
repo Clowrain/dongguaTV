@@ -1,0 +1,217 @@
+import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
+
+import 'flick_player/flick_video_player.dart';
+
+/// 东瓜TV 视频播放器组件
+/// 
+/// 基于 FlickVideoPlayer，提供简化的 API 供视频详情页使用
+class DongguaPlayer extends StatefulWidget {
+  /// 视频 URL
+  final String videoUrl;
+  
+  /// 视频标题
+  final String title;
+  
+  /// 当前剧集名
+  final String episodeName;
+  
+  /// 是否有下一集
+  final bool hasNextEpisode;
+  
+  /// 下一集回调
+  final VoidCallback? onNextEpisode;
+  
+  /// 返回回调
+  final VoidCallback? onBack;
+  
+  /// 更多选项回调
+  final VoidCallback? onMoreOptions;
+  
+  /// 视频结束回调
+  final VoidCallback? onVideoEnd;
+
+  const DongguaPlayer({
+    super.key,
+    required this.videoUrl,
+    required this.title,
+    required this.episodeName,
+    this.hasNextEpisode = false,
+    this.onNextEpisode,
+    this.onBack,
+    this.onMoreOptions,
+    this.onVideoEnd,
+  });
+
+  @override
+  State<DongguaPlayer> createState() => DongguaPlayerState();
+}
+
+class DongguaPlayerState extends State<DongguaPlayer> {
+  FlickManager? _flickManager;
+
+  @override
+  void initState() {
+    super.initState();
+    _initPlayer();
+  }
+
+  @override
+  void didUpdateWidget(DongguaPlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.videoUrl != oldWidget.videoUrl && widget.videoUrl.isNotEmpty) {
+      _changeVideo(widget.videoUrl);
+    }
+  }
+
+  @override
+  void dispose() {
+    _flickManager?.dispose();
+    super.dispose();
+  }
+
+  void _initPlayer() {
+    if (widget.videoUrl.isEmpty) return;
+    
+    _flickManager = FlickManager(
+      videoPlayerController: VideoPlayerController.networkUrl(
+        Uri.parse(widget.videoUrl),
+      ),
+      autoPlay: true,
+      onVideoEnd: widget.onVideoEnd,
+    );
+    
+    if (mounted) setState(() {});
+  }
+
+  void _changeVideo(String url) {
+    if (_flickManager == null) {
+      _flickManager = FlickManager(
+        videoPlayerController: VideoPlayerController.networkUrl(
+          Uri.parse(url),
+        ),
+        autoPlay: true,
+        onVideoEnd: widget.onVideoEnd,
+      );
+    } else {
+      _flickManager!.handleChangeVideo(
+        VideoPlayerController.networkUrl(Uri.parse(url)),
+      );
+    }
+    
+    if (mounted) setState(() {});
+  }
+
+  // ========== 公开方法 ==========
+  
+  void play() => _flickManager?.flickControlManager?.play();
+  void pause() => _flickManager?.flickControlManager?.pause();
+  void togglePlayPause() => _flickManager?.flickControlManager?.togglePlay();
+  void seekTo(Duration position) => _flickManager?.flickControlManager?.seekTo(position);
+  void setPlaybackSpeed(double speed) => _flickManager?.flickControlManager?.setPlaybackSpeed(speed);
+  void setVolume(double volume) => _flickManager?.flickControlManager?.setVolume(volume);
+
+  @override
+  Widget build(BuildContext context) {
+    // 无视频 URL 时显示占位
+    if (widget.videoUrl.isEmpty || _flickManager == null) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          // 使用屏幕宽度计算 16:9 高度
+          final width = constraints.maxWidth;
+          final height = width * 9 / 16;
+          
+          return Container(
+            width: width,
+            height: height,
+            color: Colors.black,
+            child: Stack(
+              children: [
+                // 中间提示文字
+                const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.play_circle_outline, color: Colors.white38, size: 48),
+                      SizedBox(height: 8),
+                      Text(
+                        '请选择剧集开始播放',
+                        style: TextStyle(color: Colors.white38, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+                // 顶部栏 - 返回按钮
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withAlpha(150),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    child: Row(
+                      children: [
+                        if (widget.onBack != null)
+                          IconButton(
+                            icon: const Icon(Icons.arrow_back, color: Colors.white),
+                            onPressed: widget.onBack,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // 使用屏幕宽度计算 16:9 高度，确保自适应
+        final width = constraints.maxWidth;
+        final height = width * 9 / 16;
+        
+        return SizedBox(
+          width: width,
+          height: height,
+          child: FlickVideoPlayer(
+            flickManager: _flickManager!,
+            onBack: widget.onBack,
+            topBarRightWidget: widget.onMoreOptions != null
+              ? IconButton(
+                  icon: const Icon(Icons.more_vert, color: Colors.white),
+                  onPressed: widget.onMoreOptions,
+                )
+              : null,
+            flickVideoWithControls: FlickVideoWithControls(
+              controls: DongguaPortraitControls(
+                title: widget.title,
+                episodeName: widget.episodeName,
+                progressBarSettings: FlickProgressBarSettings(
+                  height: 4,
+                ),
+              ),
+            ),
+            flickVideoWithControlsFullscreen: FlickVideoWithControls(
+              controls: DongguaLandscapeControls(
+                title: widget.title,
+                episodeName: widget.episodeName,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}

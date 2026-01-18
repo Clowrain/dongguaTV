@@ -7,6 +7,7 @@ import '../config/app_config.dart';
 import '../config/theme.dart';
 import '../models/models.dart';
 import '../services/services.dart';
+import '../widgets/donggua_player.dart';
 
 /// 多源详情页（从搜索结果点击进入）
 /// 显示多个视频源及其延迟，类似 web player-layout
@@ -52,6 +53,10 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
   bool _isTestingSources = true;
   int _currentEpisodeIndex = 0;
   bool _isSynopsisExpanded = false;
+  
+  // 播放相关
+  String _currentVideoUrl = '';
+  final GlobalKey<DongguaPlayerState> _playerKey = GlobalKey();
 
   @override
   void initState() {
@@ -59,22 +64,56 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
     // 初始化源列表
     _sourcesWithLatency = widget.sources.map((s) => _SourceWithLatency(source: s)).toList();
     
-    // 开始测速
+    // 开始测速（自动选择最快线路会在测速完成后进行）
     _testAllSources();
-    
-    // 加载第一个源的详情
-    if (_sourcesWithLatency.isNotEmpty) {
-      _switchSource(_sourcesWithLatency.first);
-    }
   }
-
+  
+  bool _hasAutoSelected = false; // 防止重复自动选择
+  
   /// 测试所有源的延迟
   Future<void> _testAllSources() async {
     setState(() => _isTestingSources = true);
     
+    const fastThreshold = 600; // 快速返回阈值 (ms)
+    const earlyReturnCount = 2; // 找到这么多快速线路就提前返回
+    const maxWaitTime = Duration(seconds: 5); // 最大等待时间
+    
+    // 设置超时自动选择定时器
+    Future.delayed(maxWaitTime, () {
+      if (!_hasAutoSelected && mounted) {
+        _autoSelectBestSource('超时');
+      }
+    });
+    
     final futures = <Future>[];
     for (final source in _sourcesWithLatency) {
-      futures.add(_testSourceLatency(source));
+      futures.add(
+        // 包裹在 try-catch 中确保单个源失败不影响其他源
+        Future(() async {
+          try {
+            await _testSourceLatency(source);
+          } catch (e) {
+            // 单个源测速失败，设置为超时状态但不中断其他源
+            if (mounted) {
+              setState(() {
+                source.latency = 9999;
+                source.testType = 'failed';
+              });
+            }
+          }
+        }).then((_) {
+          // 每个测速完成后检查是否可以提前返回
+          if (!_hasAutoSelected && mounted) {
+            final fastSources = _sourcesWithLatency.where((s) =>
+              s.testType == 'direct' && s.latency != null && s.latency! > 0 && s.latency! < fastThreshold
+            ).toList();
+            
+            if (fastSources.length >= earlyReturnCount) {
+              _autoSelectBestSource('快速');
+            }
+          }
+        }),
+      );
     }
     
     await Future.wait(futures);
@@ -89,7 +128,42 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
       return a.latency!.compareTo(b.latency!);
     });
     
+    // 如果还没自动选择，选择最快的
+    if (!_hasAutoSelected) {
+      _autoSelectBestSource('完成');
+    }
+    
     setState(() => _isTestingSources = false);
+  }
+  
+  /// 自动选择最快的源
+  void _autoSelectBestSource(String reason) {
+    if (_hasAutoSelected) return;
+    
+    // 优先选择用户端测速(direct)的结果
+    var bestSources = _sourcesWithLatency.where((s) =>
+      s.testType == 'direct' && s.latency != null && s.latency! > 0 && s.latency! < 9000
+    ).toList();
+    
+    if (bestSources.isEmpty) {
+      // 回退到所有有效测速结果
+      bestSources = _sourcesWithLatency.where((s) =>
+        s.latency != null && s.latency! > 0 && s.latency! < 9000
+      ).toList();
+    }
+    
+    if (bestSources.isNotEmpty) {
+      bestSources.sort((a, b) => a.latency!.compareTo(b.latency!));
+      final best = bestSources.first;
+      debugPrint('🎯 [$reason返回] 自动选择: ${best.source.siteName} (${best.latency}ms ${best.testType})');
+      _hasAutoSelected = true;
+      _switchSource(best);
+    } else if (_sourcesWithLatency.isNotEmpty) {
+      // 没有测速结果，选择第一个
+      debugPrint('⚠️ 无测速结果，选择第一个源');
+      _hasAutoSelected = true;
+      _switchSource(_sourcesWithLatency.first);
+    }
   }
 
   /// 测试单个源的延迟（完全匹配 HTML openDetail 逻辑）
@@ -233,6 +307,7 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
       _currentSource = source;
       _isLoadingDetail = true;
       _currentEpisodeIndex = 0;
+      _currentVideoUrl = ''; // 清空当前URL
     });
 
     try {
@@ -245,6 +320,17 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
           _currentDetail = detail;
           _isLoadingDetail = false;
         });
+        
+        // 自动播放第一集（类似 Web 版逻辑）
+        if (detail != null && detail.playSources.isNotEmpty && detail.playSources.first.episodes.isNotEmpty) {
+          debugPrint('🎯 Detail loaded, auto-playing first episode');
+          // 使用 post frame callback 确保 UI 更新后再播放
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              _playEpisode(0);
+            }
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -303,42 +389,74 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
     );
   }
 
-  /// 顶部海报
+  /// 顶部播放器/海报区域
   Widget _buildHeader() {
-    return SliverAppBar(
-      expandedHeight: 280,
-      pinned: true,
-      backgroundColor: AppTheme.backgroundColor,
-      flexibleSpace: FlexibleSpaceBar(
-        background: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (widget.pic.isNotEmpty)
-              CachedNetworkImage(
-                imageUrl: widget.pic,
-                fit: BoxFit.cover,
-                placeholder: (_, __) => Container(color: AppTheme.surfaceColor),
-                errorWidget: (_, __, ___) => Container(color: AppTheme.surfaceColor),
-              ),
-            // 渐变遮罩
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    AppTheme.backgroundColor.withAlpha(200),
-                    AppTheme.backgroundColor,
-                  ],
-                  stops: const [0.0, 0.7, 1.0],
-                ),
-              ),
-            ),
-          ],
-        ),
+    // 获取当前剧集名称
+    String episodeName = '';
+    bool hasNext = false;
+    if (_currentDetail != null && _currentDetail!.playSources.isNotEmpty) {
+      final episodes = _currentDetail!.playSources.first.episodes;
+      if (_currentEpisodeIndex < episodes.length) {
+        episodeName = episodes[_currentEpisodeIndex].name;
+        hasNext = _currentEpisodeIndex < episodes.length - 1;
+      }
+    }
+    
+    return SliverToBoxAdapter(
+      child: Column(
+        children: [
+          // 安全区域 padding
+          Container(
+            color: Colors.black,
+            height: MediaQuery.of(context).padding.top,
+          ),
+          // 播放器
+          DongguaPlayer(
+            key: _playerKey,
+            videoUrl: _currentVideoUrl,
+            title: widget.vodName,
+            episodeName: episodeName,
+            hasNextEpisode: hasNext,
+            onNextEpisode: _playNextEpisode,
+            onBack: () => Navigator.of(context).pop(),
+          ),
+        ],
       ),
     );
+  }
+  
+  /// 播放指定剧集
+  void _playEpisode(int index) {
+    debugPrint('🎬 _playEpisode called with index: $index');
+    if (_currentDetail == null || _currentDetail!.playSources.isEmpty) {
+      debugPrint('⚠️ _playEpisode: _currentDetail is null or no playSources');
+      return;
+    }
+    
+    final episodes = _currentDetail!.playSources.first.episodes;
+    debugPrint('📋 Episodes count: ${episodes.length}');
+    if (index >= episodes.length) {
+      debugPrint('⚠️ _playEpisode: index $index >= episodes.length ${episodes.length}');
+      return;
+    }
+    
+    final episode = episodes[index];
+    debugPrint('▶️ Playing episode: ${episode.name}, URL: ${episode.url}');
+    setState(() {
+      _currentEpisodeIndex = index;
+      _currentVideoUrl = episode.url;
+    });
+    debugPrint('✅ _currentVideoUrl set to: $_currentVideoUrl');
+  }
+  
+  /// 播放下一集
+  void _playNextEpisode() {
+    if (_currentDetail == null || _currentDetail!.playSources.isEmpty) return;
+    
+    final episodes = _currentDetail!.playSources.first.episodes;
+    if (_currentEpisodeIndex < episodes.length - 1) {
+      _playEpisode(_currentEpisodeIndex + 1);
+    }
   }
 
   /// 标题区域
@@ -756,16 +874,7 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
               final isActive = index == _currentEpisodeIndex;
               
               return GestureDetector(
-                onTap: () {
-                  setState(() => _currentEpisodeIndex = index);
-                  // TODO: 播放视频
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('播放: ${ep.name}'),
-                      duration: const Duration(seconds: 1),
-                    ),
-                  );
-                },
+                onTap: () => _playEpisode(index),
                 child: Container(
                   constraints: const BoxConstraints(minWidth: 50),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),

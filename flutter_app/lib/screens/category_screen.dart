@@ -209,7 +209,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
 
     return GestureDetector(
       onTap: () {
-        context.push('/search?q=${Uri.encodeComponent(media.title)}');
+        context.push('/search?keyword=${Uri.encodeComponent(media.title)}');
       },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
