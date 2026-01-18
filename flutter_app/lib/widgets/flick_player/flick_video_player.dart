@@ -34,3 +34,5 @@ export './src/controls/flick_video_with_controls.dart';
 export './src/controls/flick_portrait_controls.dart';
 export './src/controls/flick_landscape_controls.dart';
 export './src/controls/donggua_controls.dart';
+export './src/widgets/donggua_gesture_controls.dart';
+export './src/widgets/donggua_video_action.dart';

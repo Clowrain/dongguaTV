@@ -178,9 +178,15 @@ class DongguaPlayerState extends State<DongguaPlayer> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // 使用屏幕宽度计算 16:9 高度，确保自适应
+        // 使用视频实际比例或默认 16:9
+        final videoValue = _flickManager?.flickVideoManager?.videoPlayerValue;
+        final aspectRatio = (videoValue?.isInitialized == true) 
+            ? videoValue!.aspectRatio 
+            : 16 / 9;
+        
+        // 根据可用宽度计算高度
         final width = constraints.maxWidth;
-        final height = width * 9 / 16;
+        final height = width / aspectRatio;
         
         return SizedBox(
           width: width,
@@ -195,6 +201,7 @@ class DongguaPlayerState extends State<DongguaPlayer> {
                 )
               : null,
             flickVideoWithControls: FlickVideoWithControls(
+              videoFit: BoxFit.contain, // 保持视频原始比例，不裁剪
               controls: DongguaPortraitControls(
                 title: widget.title,
                 episodeName: widget.episodeName,
@@ -204,6 +211,7 @@ class DongguaPlayerState extends State<DongguaPlayer> {
               ),
             ),
             flickVideoWithControlsFullscreen: FlickVideoWithControls(
+              videoFit: BoxFit.contain, // 全屏也保持原始比例
               controls: DongguaLandscapeControls(
                 title: widget.title,
                 episodeName: widget.episodeName,

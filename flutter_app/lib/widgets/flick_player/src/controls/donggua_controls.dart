@@ -6,6 +6,13 @@ import '../../flick_video_player.dart';
 /// 东瓜TV 播放器竖屏控制层
 /// 
 /// 包含顶部栏（返回、标题、更多选项）和底部控制栏
+/// 
+/// ## 插槽系统
+/// - [topLeftSlot]: 顶部左侧区域（默认返回按钮）
+/// - [topRightSlot]: 顶部右侧区域（默认更多选项按钮）
+/// - [centerSlot]: 中央区域（默认播放/暂停按钮）
+/// - [bottomSlot]: 底部区域（默认进度条和控制按钮）
+/// - [overlaySlot]: 浮层区域（如弹幕、字幕等）
 class DongguaPortraitControls extends StatelessWidget {
   const DongguaPortraitControls({
     super.key,
@@ -16,6 +23,12 @@ class DongguaPortraitControls extends StatelessWidget {
     this.onBack,
     this.onMoreOptions,
     this.progressBarSettings,
+    // 插槽
+    this.topLeftSlot,
+    this.topRightSlot,
+    this.centerSlot,
+    this.bottomSlot,
+    this.overlaySlot,
   });
 
   final double iconSize;
@@ -25,11 +38,41 @@ class DongguaPortraitControls extends StatelessWidget {
   final VoidCallback? onBack;
   final VoidCallback? onMoreOptions;
   final FlickProgressBarSettings? progressBarSettings;
+  
+  /// 顶部左侧插槽（默认返回按钮）
+  final Widget? topLeftSlot;
+  
+  /// 顶部右侧插槽（默认更多选项按钮）
+  final Widget? topRightSlot;
+  
+  /// 中央插槽（默认播放/暂停按钮）
+  final Widget? centerSlot;
+  
+  /// 底部插槽（默认进度条和控制按钮）
+  final Widget? bottomSlot;
+  
+  /// 浮层插槽（弹幕、字幕等）
+  final Widget? overlaySlot;
 
   @override
   Widget build(BuildContext context) {
+    // 默认中央控制按钮
+    final defaultCenterControl = FlickPlayToggle(
+      size: 40,
+      color: Colors.black,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white70,
+        borderRadius: BorderRadius.circular(40),
+      ),
+    );
+    
     return Stack(
       children: <Widget>[
+        // 浮层插槽（弹幕等）- 放在最底层
+        if (overlaySlot != null)
+          Positioned.fill(child: overlaySlot!),
+          
         // 中间播放控制
         Positioned.fill(
           child: FlickShowControlsAction(
@@ -38,15 +81,7 @@ class DongguaPortraitControls extends StatelessWidget {
                 child: FlickVideoBuffer(
                   child: FlickAutoHideChild(
                     showIfVideoNotInitialized: false,
-                    child: FlickPlayToggle(
-                      size: 40,
-                      color: Colors.black,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white70,
-                        borderRadius: BorderRadius.circular(40),
-                      ),
-                    ),
+                    child: centerSlot ?? defaultCenterControl,
                   ),
                 ),
               ),
@@ -74,19 +109,21 @@ class DongguaPortraitControls extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
               child: Row(
                 children: [
-                  // 返回按钮
-                  if (onBack != null)
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: onBack,
-                    ),
+                  // 左侧插槽（默认返回按钮）
+                  topLeftSlot ?? (onBack != null
+                    ? IconButton(
+                        icon: const Icon(Icons.arrow_back, color: Colors.white),
+                        onPressed: onBack,
+                      )
+                    : const SizedBox()),
                   const Spacer(),
-                  // 更多选项按钮
-                  if (onMoreOptions != null)
-                    IconButton(
-                      icon: const Icon(Icons.more_vert, color: Colors.white),
-                      onPressed: onMoreOptions,
-                    ),
+                  // 右侧插槽（默认更多选项按钮）
+                  topRightSlot ?? (onMoreOptions != null
+                    ? IconButton(
+                        icon: const Icon(Icons.more_vert, color: Colors.white),
+                        onPressed: onMoreOptions,
+                      )
+                    : const SizedBox()),
                 ],
               ),
             ),
@@ -97,7 +134,7 @@ class DongguaPortraitControls extends StatelessWidget {
           child: FlickAutoHideChild(
             child: Padding(
               padding: const EdgeInsets.all(10.0),
-              child: Column(
+              child: bottomSlot ?? Column(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: <Widget>[
                   FlickVideoProgressBar(
@@ -158,22 +195,20 @@ class DongguaLandscapeControls extends StatelessWidget {
   Widget build(BuildContext context) {
     return Stack(
       children: <Widget>[
-        // 中间播放控制
+        // 中间播放控制 - 使用统一的手势处理
         Positioned.fill(
-          child: FlickShowControlsAction(
-            child: FlickSeekVideoAction(
-              child: Center(
-                child: FlickVideoBuffer(
-                  child: FlickAutoHideChild(
-                    showIfVideoNotInitialized: false,
-                    child: FlickPlayToggle(
-                      size: 50,
-                      color: Colors.black,
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white70,
-                        borderRadius: BorderRadius.circular(40),
-                      ),
+          child: DongguaVideoAction(
+            child: Center(
+              child: FlickVideoBuffer(
+                child: FlickAutoHideChild(
+                  showIfVideoNotInitialized: false,
+                  child: FlickPlayToggle(
+                    size: 50,
+                    color: Colors.black,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white70,
+                      borderRadius: BorderRadius.circular(40),
                     ),
                   ),
                 ),
@@ -201,8 +236,8 @@ class DongguaLandscapeControls extends StatelessWidget {
               ),
               padding: EdgeInsets.only(
                 top: MediaQuery.of(context).padding.top + 8,
-                left: 16,
-                right: 16,
+                left: MediaQuery.of(context).padding.left + 16, // 适配左侧刘海
+                right: MediaQuery.of(context).padding.right + 16, // 适配右侧刘海
                 bottom: 8,
               ),
               child: Row(
@@ -250,8 +285,8 @@ class DongguaLandscapeControls extends StatelessWidget {
           child: FlickAutoHideChild(
             child: Padding(
               padding: EdgeInsets.only(
-                left: 16,
-                right: 16,
+                left: MediaQuery.of(context).padding.left + 16, // 适配左侧刘海
+                right: MediaQuery.of(context).padding.right + 16, // 适配右侧刘海
                 bottom: MediaQuery.of(context).padding.bottom + 10,
               ),
               child: Column(
