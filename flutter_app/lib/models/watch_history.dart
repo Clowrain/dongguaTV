@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'video_item.dart';
 
 /// 观看历史模型
 class WatchHistory extends Equatable {
@@ -40,6 +41,9 @@ class WatchHistory extends Equatable {
   
   /// 最后观看时间
   final DateTime updatedAt;
+  
+  /// 所有线路 (用于直接进入播放页)
+  final List<VideoItem> sources;
 
   const WatchHistory({
     required this.id,
@@ -55,6 +59,7 @@ class WatchHistory extends Equatable {
     this.progress = 0,
     this.duration = 0,
     required this.updatedAt,
+    this.sources = const [],
   });
 
   factory WatchHistory.fromJson(Map<String, dynamic> json) {
@@ -74,6 +79,10 @@ class WatchHistory extends Equatable {
       updatedAt: json['updated_at'] != null
           ? DateTime.fromMillisecondsSinceEpoch(json['updated_at'] as int)
           : DateTime.now(),
+      sources: (json['sources'] as List<dynamic>?)
+              ?.map((e) => VideoItem.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
     );
   }
 
@@ -92,6 +101,7 @@ class WatchHistory extends Equatable {
       'progress': progress,
       'duration': duration,
       'updated_at': updatedAt.millisecondsSinceEpoch,
+      'sources': sources.map((e) => e.toJson()).toList(),
     };
   }
 
@@ -119,13 +129,13 @@ class WatchHistory extends Equatable {
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
-  /// 创建更新后的副本
   WatchHistory copyWith({
     int? sourceIndex,
     int? episodeIndex,
     String? episodeName,
     int? progress,
     int? duration,
+    List<VideoItem>? sources,
   }) {
     return WatchHistory(
       id: id,
@@ -141,6 +151,7 @@ class WatchHistory extends Equatable {
       progress: progress ?? this.progress,
       duration: duration ?? this.duration,
       updatedAt: DateTime.now(),
+      sources: sources ?? this.sources,
     );
   }
 

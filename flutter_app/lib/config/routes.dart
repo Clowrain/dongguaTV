@@ -8,6 +8,9 @@ import '../screens/home_screen.dart';
 import '../screens/search_screen.dart';
 import '../screens/detail_screen.dart';
 import '../screens/category_screen.dart';
+import '../screens/history_screen.dart';
+import '../screens/multi_source_detail_screen.dart';
+import '../models/video_item.dart';
 
 /// 应用路由配置
 class AppRoutes {
@@ -20,6 +23,7 @@ class AppRoutes {
   static const String search = '/search';
   static const String detail = '/detail/:siteKey/:vodId';
   static const String category = '/category/:key';
+  static const String history = '/history';
 
   /// 路由配置
   static final GoRouter router = GoRouter(
@@ -61,6 +65,24 @@ class AppRoutes {
           );
         },
       ),
+      // 历史记录进入播放页（使用 extra 传递数据）
+      GoRoute(
+        path: '/detail',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          if (extra == null) {
+            return const Scaffold(body: Center(child: Text('无效的播放参数')));
+          }
+          return MultiSourceDetailScreen(
+            vodName: extra['vodName'] as String? ?? '',
+            pic: extra['pic'] as String? ?? '',
+            sources: (extra['sources'] as List?)?.cast<VideoItem>() ?? [],
+            initialEpisodeIndex: extra['initialEpisodeIndex'] as int?,
+            initialPosition: extra['initialPosition'] as Duration?,
+            initialSiteKey: extra['initialSiteKey'] as String?,
+          );
+        },
+      ),
       GoRoute(
         path: '/category/:key',
         builder: (context, state) {
@@ -74,6 +96,10 @@ class AppRoutes {
             sortMode: queryParams['sortMode'],
           );
         },
+      ),
+      GoRoute(
+        path: '/history',
+        builder: (context, state) => const HistoryScreen(),
       ),
     ],
   );

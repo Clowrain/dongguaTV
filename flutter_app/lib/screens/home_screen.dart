@@ -10,6 +10,8 @@ import '../config/app_config.dart';
 import '../config/theme.dart';
 import '../models/models.dart';
 import '../config/routes.dart';
+import '../services/watch_history_service.dart';
+import 'package:provider/provider.dart';
 
 /// 首页
 class HomeScreen extends StatefulWidget {
@@ -162,11 +164,24 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: _buildCategoryNav(context),
                   ),
                   
-                  // 继续观看
-                  if (state.continueWatching.isNotEmpty) ...[
-                    _buildSectionHeader('继续观看'),
-                    _buildHistoryRow(state.continueWatching),
-                  ],
+                  // 继续观看 - 使用 Consumer 监听 WatchHistoryService
+                  SliverToBoxAdapter(
+                    child: Consumer<WatchHistoryService>(
+                      builder: (context, historyService, _) {
+                        final histories = historyService.getRecent(20);
+                        if (histories.isEmpty) return const SizedBox.shrink();
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildSectionHeaderWithMore('继续观看', onMoreTap: () {
+                              context.push('/history');
+                            }),
+                            _buildHistoryRow(histories),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
                   
                   // 🎬 电影榜
                   if (state.movieRow.isNotEmpty) ...[
@@ -1145,6 +1160,46 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+  
+  /// 构建带"更多"按钮的区域标题（用于观看历史）
+  Widget _buildSectionHeaderWithMore(String title, {required VoidCallback onMoreTap}) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+          GestureDetector(
+            onTap: onMoreTap,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '更多',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right,
+                  size: 18,
+                  color: AppTheme.textSecondary,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   /// 构建带 GlobalKey 和"更多"按钮的区域标题
   Widget _buildSectionHeaderWithKey(String title, GlobalKey key, {String? categoryKey}) {
@@ -1235,26 +1290,29 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// 构建观看历史横向列表
   Widget _buildHistoryRow(List<WatchHistory> items) {
-    return SliverToBoxAdapter(
-      child: SizedBox(
-        height: 200,
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          itemCount: items.length,
-          itemBuilder: (context, index) {
-            final item = items[index];
-            return _HistoryCard(
-              history: item,
-              onTap: () => AppRoutes.goToDetail(
-                context,
-                siteKey: item.siteKey,
-                vodId: item.vodId,
-                vodName: item.vodName,
-              ),
-            );
-          },
-        ),
+    return SizedBox(
+      height: 200,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        itemCount: items.length,
+        itemBuilder: (context, index) {
+          final item = items[index];
+          return _HistoryCard(
+            history: item,
+            onTap: () => context.push(
+              '/detail',
+              extra: {
+                'vodName': item.vodName,
+                'pic': item.vodPic,
+                'sources': item.sources,
+                'initialEpisodeIndex': item.episodeIndex,
+                'initialPosition': Duration(seconds: item.progress),
+                'initialSiteKey': item.siteKey,
+              },
+            ),
+          );
+        },
       ),
     );
   }

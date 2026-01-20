@@ -118,6 +118,18 @@ class DongguaPlayerState extends State<DongguaPlayer> {
   void seekTo(Duration position) => _flickManager?.flickControlManager?.seekTo(position);
   void setPlaybackSpeed(double speed) => _flickManager?.flickControlManager?.setPlaybackSpeed(speed);
   void setVolume(double volume) => _flickManager?.flickControlManager?.setVolume(volume);
+  
+  /// 获取当前播放位置
+  Duration get currentPosition => 
+      _flickManager?.flickVideoManager?.videoPlayerValue?.position ?? Duration.zero;
+  
+  /// 获取视频总时长
+  Duration get duration => 
+      _flickManager?.flickVideoManager?.videoPlayerValue?.duration ?? Duration.zero;
+  
+  /// 是否正在播放
+  bool get isPlaying => 
+      _flickManager?.flickVideoManager?.videoPlayerValue?.isPlaying ?? false;
 
   @override
   Widget build(BuildContext context) {

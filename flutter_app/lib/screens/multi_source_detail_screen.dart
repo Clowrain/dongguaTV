@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dio/dio.dart';
+import 'package:provider/provider.dart';
 
 import '../config/app_config.dart';
 import '../config/theme.dart';
@@ -15,12 +16,24 @@ class MultiSourceDetailScreen extends StatefulWidget {
   final String vodName;
   final String pic;
   final List<VideoItem> sources;
+  
+  /// 初始剧集索引（从历史恢复时使用）
+  final int? initialEpisodeIndex;
+  
+  /// 初始播放进度（从历史恢复时使用）
+  final Duration? initialPosition;
+  
+  /// 初始源站点（从历史恢复时使用，优先选择此源）
+  final String? initialSiteKey;
 
   const MultiSourceDetailScreen({
     super.key,
     required this.vodName,
     required this.pic,
     required this.sources,
+    this.initialEpisodeIndex,
+    this.initialPosition,
+    this.initialSiteKey,
   });
 
   @override
@@ -52,11 +65,12 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
   bool _isLoadingDetail = false;
   bool _isTestingSources = true;
   int _currentEpisodeIndex = 0;
-  bool _isSynopsisExpanded = false;
   
   // 播放相关
   String _currentVideoUrl = '';
   final GlobalKey<DongguaPlayerState> _playerKey = GlobalKey();
+  bool _hasRestoredPosition = false; // 是否已恢复播放进度
+  Timer? _progressSaveTimer; // 自动保存进度定时器
 
   @override
   void initState() {
@@ -66,6 +80,17 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
     
     // 开始测速（自动选择最快线路会在测速完成后进行）
     _testAllSources();
+    
+    // 启动自动保存进度定时器（每30秒）
+    _progressSaveTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _saveProgress();
+    });
+  }
+  
+  @override
+  void dispose() {
+    _progressSaveTimer?.cancel();
+    super.dispose();
   }
   
   bool _hasAutoSelected = false; // 防止重复自动选择
@@ -139,6 +164,18 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
   /// 自动选择最快的源
   void _autoSelectBestSource(String reason) {
     if (_hasAutoSelected) return;
+    
+    // 如果有历史记录指定的源，优先使用
+    if (widget.initialSiteKey != null) {
+      final historySource = _sourcesWithLatency.firstWhere(
+        (s) => s.source.siteKey == widget.initialSiteKey,
+        orElse: () => _sourcesWithLatency.first,
+      );
+      debugPrint('🎯 [历史恢复] 使用历史记录源: ${historySource.source.siteName}');
+      _hasAutoSelected = true;
+      _switchSource(historySource);
+      return;
+    }
     
     // 优先选择用户端测速(direct)的结果
     var bestSources = _sourcesWithLatency.where((s) =>
@@ -305,38 +342,73 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
     
     setState(() {
       _currentSource = source;
-      _isLoadingDetail = true;
       _currentEpisodeIndex = 0;
       _currentVideoUrl = ''; // 清空当前URL
     });
-
-    try {
-      final detail = await ApiService().getDetail(
-        source.source.vodId,
-        source.source.siteKey,
-      );
+    
+    // 优先使用测速时缓存的详情
+    VideoDetail? detail = source.cachedDetail;
+    
+    if (detail != null) {
+      // 使用缓存的详情，无需等待
       if (mounted) {
         setState(() {
           _currentDetail = detail;
           _isLoadingDetail = false;
         });
         
-        // 自动播放第一集（类似 Web 版逻辑）
-        if (detail != null && detail.playSources.isNotEmpty && detail.playSources.first.episodes.isNotEmpty) {
-          debugPrint('🎯 Detail loaded, auto-playing first episode');
-          // 使用 post frame callback 确保 UI 更新后再播放
+        // 自动播放（优先使用历史记录的剧集索引）
+        if (detail.playSources.isNotEmpty && detail.playSources.first.episodes.isNotEmpty) {
+          final episodeCount = detail.playSources.first.episodes.length;
+          // 使用历史记录的索引，超出范围则回退到第一集
+          final targetIndex = (widget.initialEpisodeIndex != null && 
+                               widget.initialEpisodeIndex! < episodeCount)
+              ? widget.initialEpisodeIndex!
+              : 0;
+          debugPrint('🎯 Using cached detail, auto-playing episode $targetIndex');
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
-              _playEpisode(0);
+              _playEpisode(targetIndex);
             }
           });
         }
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoadingDetail = false;
-        });
+    } else {
+      // 没有缓存，需要请求API
+      setState(() => _isLoadingDetail = true);
+      
+      try {
+        detail = await ApiService().getDetail(
+          source.source.vodId,
+          source.source.siteKey,
+        );
+        if (mounted) {
+          setState(() {
+            _currentDetail = detail;
+            _isLoadingDetail = false;
+          });
+          
+          // 自动播放（优先使用历史记录的剧集索引）
+          if (detail != null && detail.playSources.isNotEmpty && detail.playSources.first.episodes.isNotEmpty) {
+            final episodeCount = detail.playSources.first.episodes.length;
+            final targetIndex = (widget.initialEpisodeIndex != null && 
+                                 widget.initialEpisodeIndex! < episodeCount)
+                ? widget.initialEpisodeIndex!
+                : 0;
+            debugPrint('🎯 Detail loaded, auto-playing episode $targetIndex');
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                _playEpisode(targetIndex);
+              }
+            });
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _isLoadingDetail = false;
+          });
+        }
       }
     }
   }
@@ -360,12 +432,15 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
           // 计算播放器高度（16:9）但不超过可用高度的60%
           final screenWidth = constraints.maxWidth;
           final screenHeight = constraints.maxHeight;
-          final isLandscape = screenWidth > screenHeight;
           
-          // 横屏时播放器可以占用更多空间，竖屏时限制高度
-          final maxPlayerHeight = isLandscape 
-              ? screenHeight - statusBarHeight  // 横屏时占满
-              : (screenHeight - statusBarHeight) * 0.4;  // 竖屏时最多40%
+          // 判断是否为移动端全屏模式（横屏且高度较小）
+          // 桌面端即使宽屏也应显示下方内容
+          final isMobileFullscreen = screenWidth > screenHeight && screenHeight < 500;
+          
+          // 移动端全屏时播放器占满，否则限制高度
+          final maxPlayerHeight = isMobileFullscreen 
+              ? screenHeight - statusBarHeight  // 全屏模式占满
+              : (screenHeight - statusBarHeight) * 0.4;  // 正常模式最多40%
           final playerHeight16x9 = screenWidth * 9 / 16;
           final playerHeight = playerHeight16x9.clamp(0.0, maxPlayerHeight);
           
@@ -383,8 +458,8 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
                 child: _buildPlayer(),
               ),
               
-              // 下方内容可滚动（横屏时隐藏）
-              if (!isLandscape)
+              // 下方内容可滚动（只在移动端全屏时隐藏）
+              if (!isMobileFullscreen)
                 Expanded(
                   child: SingleChildScrollView(
                     child: Column(
@@ -392,16 +467,20 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
                         // 标题和元信息
                         _buildTitleSection(),
                         
-                        // 简介
-                        if (_currentDetail != null && _currentDetail!.vodContent.isNotEmpty)
-                          _buildSynopsis(),
-                        
                         // 线路选择
                         _buildSourceSelector(),
+                        
+                        const SizedBox(height: 12),
                         
                         // 剧集列表
                         if (_currentDetail != null && _currentDetail!.playSources.isNotEmpty)
                           _buildEpisodeGrid(),
+                        
+                        const SizedBox(height: 16),
+                        
+                        // 简介（放在最后）
+                        if (_currentDetail != null && _currentDetail!.vodContent.isNotEmpty)
+                          _buildSynopsis(),
                         
                         // 底部间距
                         const SizedBox(height: 100),
@@ -462,6 +541,21 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
       _currentVideoUrl = episode.url;
     });
     debugPrint('✅ _currentVideoUrl set to: $_currentVideoUrl');
+    
+    // 如果是从历史记录恢复，跳转到上次播放位置
+    if (!_hasRestoredPosition && widget.initialPosition != null && widget.initialPosition!.inSeconds > 0) {
+      _hasRestoredPosition = true;
+      // 延迟执行，等待播放器初始化
+      Future.delayed(const Duration(milliseconds: 1500), () {
+        if (mounted) {
+          debugPrint('⏩ 恢复播放进度: ${widget.initialPosition}');
+          _playerKey.currentState?.seekTo(widget.initialPosition!);
+        }
+      });
+    }
+    
+    // 保存观看历史
+    _saveWatchHistory(episode.name);
   }
   
   /// 播放下一集
@@ -473,51 +567,175 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
       _playEpisode(_currentEpisodeIndex + 1);
     }
   }
+  
+  /// 保存观看历史
+  void _saveWatchHistory(String episodeName) {
+    if (_currentSource == null || _currentDetail == null) return;
+    
+    final historyService = context.read<WatchHistoryService>();
+    final history = WatchHistory(
+      id: '${_currentSource!.source.siteKey}_${_currentSource!.source.vodId}',
+      vodId: _currentSource!.source.vodId,
+      vodName: widget.vodName,
+      vodPic: widget.pic,
+      typeName: _currentDetail!.typeName,
+      siteKey: _currentSource!.source.siteKey,
+      siteName: _currentSource!.source.siteName,
+      sourceIndex: 0,
+      episodeIndex: _currentEpisodeIndex,
+      episodeName: episodeName,
+      progress: 0,
+      duration: 0,
+      updatedAt: DateTime.now(),
+      sources: widget.sources,
+    );
+    
+    historyService.save(history);
+    debugPrint('📝 Saved watch history: ${widget.vodName} - $episodeName');
+  }
+  
+  /// 保存当前播放进度
+  void _saveProgress() {
+    if (_currentSource == null) return;
+    
+    final player = _playerKey.currentState;
+    if (player == null) return;
+    
+    final position = player.currentPosition;
+    final duration = player.duration;
+    
+    // 只有在有进度时才保存
+    if (position.inSeconds <= 0 || duration.inSeconds <= 0) return;
+    
+    final historyId = '${_currentSource!.source.siteKey}_${_currentSource!.source.vodId}';
+    final historyService = context.read<WatchHistoryService>();
+    
+    historyService.updateProgress(
+      historyId,
+      position.inSeconds,
+      duration.inSeconds,
+    );
+    debugPrint('💾 Auto-saved progress: ${position.inSeconds}s / ${duration.inSeconds}s');
+  }
 
-  /// 标题区域
+  /// 标题区域 - B站风格
   Widget _buildTitleSection() {
+    // 获取视频详情元数据
+    final year = _currentDetail?.vodYear ?? '';
+    final area = _currentDetail?.vodArea ?? '';
+    final typeName = _currentDetail?.typeName ?? '';
+    final score = _currentDetail?.vodScore ?? '';
+    
+    // 构建元数据标签列表
+    final metaTags = <String>[];
+    if (year.isNotEmpty && year != '0') metaTags.add(year);
+    if (area.isNotEmpty) metaTags.add(area);
+    if (typeName.isNotEmpty) metaTags.add(typeName);
+    
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 标题
-          Text(
-            widget.vodName,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
-            ),
+          // 第一行: 标题 + 操作按钮
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 标题
+              Expanded(
+                child: Text(
+                  widget.vodName,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textPrimary,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 12),
+              // 收藏按钮（布局占位）
+              _buildActionButton(Icons.favorite_border, '收藏', () {
+                // TODO: 实现收藏功能
+              }),
+              const SizedBox(width: 8),
+              // 下载按钮（布局占位）
+              _buildActionButton(Icons.download_outlined, '下载', () {
+                // TODO: 实现下载功能
+              }),
+            ],
           ),
           const SizedBox(height: 8),
-          // 当前播放源
-          if (_currentSource != null)
-            Row(
-              children: [
-                const Text(
-                  '正在播放: ',
-                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
-                ),
-                Text(
-                  _currentSource!.source.siteName,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
+          // 第二行: 元数据 + 评分
+          Row(
+            children: [
+              // 元数据标签
+              if (metaTags.isNotEmpty)
+                Expanded(
+                  child: Text(
+                    metaTags.join(' · '),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppTheme.textSecondary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-              ],
-            ),
+              // 评分
+              if (score.isNotEmpty && score != '0' && score != '0.0')
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFA726).withAlpha(30),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.star, size: 14, color: Color(0xFFFFA726)),
+                      const SizedBox(width: 2),
+                      Text(
+                        score,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFFFFA726),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+  
+  /// 操作按钮
+  Widget _buildActionButton(IconData icon, String label, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 22, color: AppTheme.textSecondary),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(fontSize: 10, color: AppTheme.textSecondary),
+          ),
         ],
       ),
     );
   }
 
-  /// 简介
   Widget _buildSynopsis() {
     final content = _currentDetail!.vodContent;
-    const int maxLines = 3;
+    final director = _currentDetail!.vodDirector;
+    final actor = _currentDetail!.vodActor;
     
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -527,243 +745,144 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
           const Text(
             '剧情简介',
             style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
               color: AppTheme.textPrimary,
             ),
           ),
           const SizedBox(height: 8),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              // 检测文本是否会溢出
-              final textStyle = const TextStyle(
-                fontSize: 13,
-                color: AppTheme.textSecondary,
-                height: 1.7,
-              );
-              final textPainter = TextPainter(
-                text: TextSpan(text: content, style: textStyle),
-                maxLines: maxLines,
-                textDirection: TextDirection.ltr,
-              );
-              textPainter.layout(maxWidth: constraints.maxWidth);
-              final isOverflowing = textPainter.didExceedMaxLines;
-              
-              if (_isSynopsisExpanded) {
-                // 展开状态：显示全部内容 + 行内收起按钮
-                return RichText(
-                  text: TextSpan(
-                    style: textStyle,
-                    children: [
-                      TextSpan(text: content),
-                      const TextSpan(text: ' '),
-                      WidgetSpan(
-                        alignment: PlaceholderAlignment.middle,
-                        child: GestureDetector(
-                          onTap: () => setState(() => _isSynopsisExpanded = false),
-                          child: const Text(
-                            '收起',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: AppTheme.accentColor,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              } else if (isOverflowing) {
-                // 收起状态且有溢出：显示截断文本 + 行内展开按钮
-                // 计算截断后能显示多少字符
-                final endPos = textPainter.getPositionForOffset(
-                  Offset(constraints.maxWidth, textPainter.height - 5),
-                );
-                // 留出 "...展开" 的空间，大约减少8个字符
-                final truncatedLength = (endPos.offset - 8).clamp(0, content.length);
-                final truncatedText = content.substring(0, truncatedLength);
-                
-                return RichText(
-                  maxLines: maxLines,
-                  overflow: TextOverflow.clip,
-                  text: TextSpan(
-                    style: textStyle,
-                    children: [
-                      TextSpan(text: '$truncatedText...'),
-                      WidgetSpan(
-                        alignment: PlaceholderAlignment.middle,
-                        child: GestureDetector(
-                          onTap: () => setState(() => _isSynopsisExpanded = true),
-                          child: const Text(
-                            '展开',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: AppTheme.accentColor,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              } else {
-                // 内容不溢出，直接显示
-                return Text(content, style: textStyle);
-              }
-            },
-          ),
-          const SizedBox(height: 16),
-        ],
-      ),
-    );
-  }
-
-  /// 线路选择器
-  Widget _buildSourceSelector() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 标题
-          Row(
-            children: [
-              const Text(
-                '切换线路',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-              if (_isTestingSources) ...[
-                const SizedBox(width: 8),
-                const SizedBox(
-                  width: 12,
-                  height: 12,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.textSecondary),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '正在测速...',
-                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary.withAlpha(180)),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 12),
-          
-          // 测速类型图例
-          if (!_isTestingSources && (_fastSources.isNotEmpty || _slowSources.isNotEmpty))
-            _buildLegend(),
-          
-          // 快速线路
-          if (_fastSources.isNotEmpty || _slowSources.isNotEmpty) ...[
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                ..._fastSources.map((s) => _buildSourcePill(s)),
-              ],
+          // 简介内容
+          Text(
+            content,
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppTheme.textSecondary,
+              height: 1.6,
             ),
-            // 慢速线路分隔
-            if (_slowSources.isNotEmpty && _fastSources.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  border: Border(top: BorderSide(color: AppTheme.borderColor)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.hourglass_bottom, size: 14, color: AppTheme.textSecondary.withAlpha(150)),
-                    const SizedBox(width: 4),
-                    Text(
-                      '较慢线路 (${_slowSources.length})',
-                      style: TextStyle(fontSize: 11, color: AppTheme.textSecondary.withAlpha(150)),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            // 慢速线路
-            if (_slowSources.isNotEmpty)
-              Opacity(
-                opacity: 0.7,
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _slowSources.map((s) => _buildSourcePill(s)).toList(),
-                ),
-              ),
+          ),
+          // 导演信息
+          if (director.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _buildInfoRow('导演', director),
           ],
-          
-          // 正在测速中
-          if (_isTestingSources && _fastSources.isEmpty && _slowSources.isEmpty)
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _sourcesWithLatency.map((s) => _buildSourcePill(s)).toList(),
-            ),
-          
+          // 演员信息
+          if (actor.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _buildInfoRow('主演', actor),
+          ],
           const SizedBox(height: 16),
         ],
       ),
     );
   }
-
-  /// 测速类型图例
-  Widget _buildLegend() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          _buildLegendItem('直连', const Color(0xFF10B981), const Color(0xFF059669)),
-          const SizedBox(width: 16),
-          _buildLegendItem('中转', const Color(0xFFF59E0B), const Color(0xFFD97706)),
-          const SizedBox(width: 16),
-          _buildLegendItem('服务', const Color(0xFF6366F1), const Color(0xFF4F46E5)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLegendItem(String label, Color color1, Color color2) {
+  
+  /// 信息行
+  Widget _buildInfoRow(String label, String value) {
     return Row(
-      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(colors: [color1, color2]),
-            borderRadius: BorderRadius.circular(3),
+        Text(
+          '$label: ',
+          style: TextStyle(
+            fontSize: 12,
+            color: AppTheme.textSecondary.withAlpha(180),
           ),
-          child: Text(label, style: const TextStyle(fontSize: 9, color: Colors.white)),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppTheme.textSecondary,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       ],
     );
   }
 
-  /// 源 pill
-  Widget _buildSourcePill(_SourceWithLatency source) {
+  /// 线路选择器 - Tab 风格
+  Widget _buildSourceSelector() {
+    // 合并快速和慢速线路，按延迟排序
+    final allSources = <_SourceWithLatency>[
+      ..._fastSources,
+      ..._slowSources,
+    ];
+    
+    // 如果还在测速，显示所有源
+    final sourcesToShow = allSources.isEmpty ? _sourcesWithLatency : allSources;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 线路 Tab 行
+        SizedBox(
+          height: 40,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: sourcesToShow.length + (_isTestingSources ? 1 : 0),
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              // 显示测速指示器
+              if (_isTestingSources && index == sourcesToShow.length) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.textSecondary),
+                      ),
+                      const SizedBox(width: 4),
+                      Text('测速中...', style: TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
+                    ],
+                  ),
+                );
+              }
+              
+              final source = sourcesToShow[index];
+              return _buildSourceTab(source);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+  
+  /// 单个线路 Tab
+  Widget _buildSourceTab(_SourceWithLatency source) {
     final isActive = _currentSource?.source.siteKey == source.source.siteKey;
+    final latency = source.latency;
+    final hasLatency = latency != null && latency >= 0 && latency < 9999;
     
     return GestureDetector(
       onTap: () => _switchSource(source),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: isActive ? AppTheme.accentColor : AppTheme.surfaceColor,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isActive ? AppTheme.accentColor : AppTheme.borderColor,
+            width: isActive ? 2 : 1,
           ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // 选中标记
+            if (isActive)
+              const Padding(
+                padding: EdgeInsets.only(right: 4),
+                child: Icon(Icons.check, size: 14, color: Colors.white),
+              ),
+            // 线路名称
             Text(
               source.source.siteName,
               style: TextStyle(
@@ -772,73 +891,30 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
                 fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
               ),
             ),
-            if (source.latency != null && source.latency! >= 0) ...[
+            // 延迟
+            if (hasLatency) ...[
               const SizedBox(width: 6),
-              // 延迟点
               Container(
-                width: 6,
-                height: 6,
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                 decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _getLatencyColor(source.latency!),
+                  color: isActive 
+                      ? Colors.white.withAlpha(50)
+                      : _getLatencyColor(latency).withAlpha(30),
+                  borderRadius: BorderRadius.circular(4),
                 ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '${source.latency}ms',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: (isActive ? Colors.white : AppTheme.textSecondary).withAlpha(150),
-                ),
-              ),
-              const SizedBox(width: 4),
-              _buildTestTypeBadge(source.testType),
-            ] else if (source.latency == null) ...[
-              const SizedBox(width: 6),
-              SizedBox(
-                width: 10,
-                height: 10,
-                child: CircularProgressIndicator(
-                  strokeWidth: 1.5,
-                  color: isActive ? Colors.white : AppTheme.textSecondary,
+                child: Text(
+                  '${latency}ms',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: isActive ? Colors.white : _getLatencyColor(latency),
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ],
           ],
         ),
       ),
-    );
-  }
-
-  /// 测速类型徽章
-  Widget _buildTestTypeBadge(String type) {
-    Color color1, color2;
-    String label;
-    
-    switch (type) {
-      case 'direct':
-        color1 = const Color(0xFF10B981);
-        color2 = const Color(0xFF059669);
-        label = '直连';
-        break;
-      case 'proxy':
-        color1 = const Color(0xFFF59E0B);
-        color2 = const Color(0xFFD97706);
-        label = '中转';
-        break;
-      default:
-        color1 = const Color(0xFF6366F1);
-        color2 = const Color(0xFF4F46E5);
-        label = '服务';
-    }
-    
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [color1, color2]),
-        borderRadius: BorderRadius.circular(3),
-      ),
-      child: Text(label, style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold)),
     );
   }
 
@@ -849,7 +925,7 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
     return const Color(0xFFEF4444); // 红色 - 慢
   }
 
-  /// 剧集网格
+  /// 剧集横向滚动 - B站风格
   Widget _buildEpisodeGrid() {
     if (_isLoadingDetail) {
       return const Padding(
@@ -866,25 +942,49 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
 
     // 使用第一个播放源的剧集列表
     final episodes = _currentDetail!.playSources.first.episodes;
+    
+    // 如果只有一集（电影），简化显示
+    if (episodes.length == 1) {
+      return const SizedBox.shrink();
+    }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '选集播放 (${episodes.length}集)',
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 标题行
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              Text(
+                '选集',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '(${episodes.length}集)',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: List.generate(episodes.length, (index) {
+        ),
+        const SizedBox(height: 8),
+        // 横向滚动选集
+        SizedBox(
+          height: 40,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: episodes.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
               final ep = episodes[index];
               final isActive = index == _currentEpisodeIndex;
               
@@ -892,29 +992,41 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
                 onTap: () => _playEpisode(index),
                 child: Container(
                   constraints: const BoxConstraints(minWidth: 50),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
                     color: isActive ? AppTheme.accentColor : AppTheme.surfaceColor,
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(
                       color: isActive ? AppTheme.accentColor : AppTheme.borderColor,
+                      width: isActive ? 2 : 1,
                     ),
                   ),
-                  child: Text(
-                    ep.name,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: isActive ? Colors.white : AppTheme.textPrimary,
-                      fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // 当前播放标记
+                      if (isActive)
+                        const Padding(
+                          padding: EdgeInsets.only(right: 4),
+                          child: Icon(Icons.play_arrow, size: 14, color: Colors.white),
+                        ),
+                      Text(
+                        ep.name,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isActive ? Colors.white : AppTheme.textPrimary,
+                          fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               );
-            }),
+            },
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
