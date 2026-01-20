@@ -1,0 +1,168 @@
+name: Build and Release Donggua TV
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'flutter_app/**'
+      - '.github/workflows/release.yml'
+
+defaults:
+  run:
+    working-directory: flutter_app
+
+jobs:
+  # ============================
+  # 1. 构建 Android (APK + AAB)
+  # ============================
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.0'
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      # ---- Build APK ----
+      - name: Build Android APK
+        run: flutter build apk --release
+
+      # ---- Build AAB ----
+      - name: Build Android App Bundle
+        run: flutter build appbundle --release
+
+      # ---- Rename outputs to donggua_tv.xxx ----
+      - name: Rename Android outputs
+        run: |
+          mv build/app/outputs/flutter-apk/app-release.apk donggua_tv.apk
+          mv build/app/outputs/bundle/release/app-release.aab donggua_tv.aab
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-artifacts
+          path: |
+            flutter_app/donggua_tv.apk
+            flutter_app/donggua_tv.aab
+
+  # ============================
+  # 2. 构建并归档 iOS 和 macOS
+  # ============================
+  build-macos-ios:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.0'
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      # -------- macOS: donggua_tv.dmg --------
+      - name: Build macOS app
+        run: flutter build macos --release
+
+      - name: Create donggua_tv.dmg
+        run: |
+          cd build/macos/Build/Products/Release
+          APP_BUNDLE=$(find . -name "*.app" | head -n 1)
+          echo "Using macOS app: $APP_BUNDLE"
+          # 使用 hdiutil 生成 DMG
+          hdiutil create -volname "donggua_tv" \
+            -srcfolder "$APP_BUNDLE" \
+            -ov -format UDZO "donggua_tv.dmg"
+          # 移动到 flutter_app 根目录
+          mv donggua_tv.dmg ../../../../..
+
+      # -------- iOS: donggua_tv.ipa --------
+      - name: Build iOS app (no codesign)
+        run: |
+          # 生成 iOS 应用，不进行签名
+          flutter build ios --release --no-codesign
+
+          # 进入到 iOS 构建目录，找到生成的 .app 文件
+          APP_PATH="build/ios/iphoneos/Runner.app"
+
+          # 将 .app 文件压缩并生成 .ipa 文件
+          mkdir -p Payload
+          cp -R $APP_PATH Payload/
+          zip -r donggua_tv.ipa Payload
+
+      - name: Upload macOS & iOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-ios-artifacts
+          path: |
+            flutter_app/donggua_tv.dmg
+            flutter_app/donggua_tv.ipa
+
+  # ============================
+  # 3. 创建 GitHub Release 并上传产物
+  # ============================
+  create-release:
+    runs-on: ubuntu-latest
+    needs:
+      - build-android
+      - build-macos-ios
+
+    permissions:
+      contents: write   # 需要写权限创建 Release
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 读取版本号并创建 GitHub Release
+      - name: Read version from pubspec.yaml
+        id: version
+        working-directory: flutter_app
+        run: |
+          VERSION=$(awk -F': ' '/^version:/ {gsub("\\+", "-", $2); print $2}' pubspec.yaml)
+          echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Show version
+        run: echo "App version from pubspec.yaml = $APP_VERSION"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Show downloaded files
+        run: ls -R dist
+
+      - name: Create GitHub Release & upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.APP_VERSION }}
+          name: "Donggua TV v${{ env.APP_VERSION }}"
+          draft: false
+          prerelease: false
+          files: |
+            dist/android-artifacts/donggua_tv.apk
+            dist/android-artifacts/donggua_tv.aab
+            dist/macos-ios-artifacts/donggua_tv.dmg
+            dist/macos-ios-artifacts/donggua_tv.ipa
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
