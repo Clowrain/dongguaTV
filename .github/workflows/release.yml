@@ -150,6 +150,7 @@ jobs:
           path: dist
 
       - name: Show downloaded files
+        working-directory: .
         run: ls -R dist
 
       - name: Create GitHub Release & upload assets
