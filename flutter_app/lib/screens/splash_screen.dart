@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../blocs/blocs.dart';
 import '../config/theme.dart';
+import '../utils/platform_utils.dart';
 
 /// 启动页
 class SplashScreen extends StatelessWidget {
@@ -29,10 +30,10 @@ class SplashScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Logo
+              // Logo - TV 平台使用更大的尺寸
               Container(
-                width: 120,
-                height: 120,
+                width: PlatformUtils.isAndroidTV ? 160.0 : 120.0,
+                height: PlatformUtils.isAndroidTV ? 160.0 : 120.0,
                 decoration: BoxDecoration(
                   color: AppTheme.accentColor,
                   borderRadius: BorderRadius.circular(24),
@@ -44,18 +45,18 @@ class SplashScreen extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.play_arrow_rounded,
-                  size: 80,
+                  size: PlatformUtils.isAndroidTV ? 100.0 : 80.0,
                   color: Colors.white,
                 ),
               ),
               const SizedBox(height: 24),
               // 标题
-              const Text(
+              Text(
                 'E视界',
                 style: TextStyle(
-                  fontSize: 32,
+                  fontSize: 32 * PlatformUtils.recommendedFontScale,
                   fontWeight: FontWeight.bold,
                   color: AppTheme.textPrimary,
                   letterSpacing: 4,
@@ -63,18 +64,18 @@ class SplashScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                '流媒体聚合播放器',
+                PlatformUtils.isAndroidTV ? 'Android TV 流媒体聚合播放器' : '流媒体聚合播放器',
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 14 * PlatformUtils.recommendedFontScale,
                   color: AppTheme.textSecondary.withOpacity(0.7),
                 ),
               ),
               const SizedBox(height: 48),
               // 加载指示器
-              const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
+              SizedBox(
+                width: PlatformUtils.isAndroidTV ? 32.0 : 24.0,
+                height: PlatformUtils.isAndroidTV ? 32.0 : 24.0,
+                child: const CircularProgressIndicator(
                   strokeWidth: 2,
                   valueColor: AlwaysStoppedAnimation<Color>(AppTheme.accentColor),
                 ),

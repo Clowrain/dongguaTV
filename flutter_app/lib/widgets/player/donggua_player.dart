@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../utils/platform_utils.dart';
 import 'player.dart';
 
 /// 东瓜TV 视频播放器组件
@@ -262,12 +263,20 @@ class DongguaPlayerState extends State<DongguaPlayer> {
             ),
             flickVideoWithControlsFullscreen: FlickVideoWithControls(
               videoFit: BoxFit.contain, // 全屏也保持原始比例
-              controls: DongguaLandscapeControls(
-                title: widget.title,
-                episodeName: widget.episodeName,
-                onGestureStart: widget.onGestureStart,
-                onGestureEnd: widget.onGestureEnd,
-              ),
+              controls: PlatformUtils.isAndroidTV
+                  ? DongguaTvControls(
+                      title: widget.title,
+                      episodeName: widget.episodeName,
+                      onBack: widget.onBack,
+                      hasNextEpisode: widget.hasNextEpisode,
+                      onNextEpisode: widget.onNextEpisode,
+                    )
+                  : DongguaLandscapeControls(
+                      title: widget.title,
+                      episodeName: widget.episodeName,
+                      onGestureStart: widget.onGestureStart,
+                      onGestureEnd: widget.onGestureEnd,
+                    ),
             ),
           ),
         );

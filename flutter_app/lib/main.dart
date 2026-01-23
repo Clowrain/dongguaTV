@@ -4,9 +4,13 @@ import 'package:media_kit/media_kit.dart';
 
 import 'app.dart';
 import 'services/services.dart';
+import 'utils/platform_utils.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 初始化平台检测
+  await PlatformUtils.init();
 
   // 初始化 MediaKit (视频播放器)
   MediaKit.ensureInitialized();
