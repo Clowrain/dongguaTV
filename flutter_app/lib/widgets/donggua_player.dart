@@ -37,6 +37,9 @@ class DongguaPlayer extends StatefulWidget {
   /// 手势结束时回调（父级应恢复滚动）
   final VoidCallback? onGestureEnd;
 
+  /// 播放器初始化完成回调（可用于恢复播放进度）
+  final VoidCallback? onPlayerReady;
+
   const DongguaPlayer({
     super.key,
     required this.videoUrl,
@@ -49,6 +52,7 @@ class DongguaPlayer extends StatefulWidget {
     this.onVideoEnd,
     this.onGestureStart,
     this.onGestureEnd,
+    this.onPlayerReady,
   });
 
   @override
@@ -57,6 +61,7 @@ class DongguaPlayer extends StatefulWidget {
 
 class DongguaPlayerState extends State<DongguaPlayer> {
   FlickManager? _flickManager;
+  bool _hasNotifiedReady = false; // 防止重复通知
 
   @override
   void initState() {
@@ -68,6 +73,7 @@ class DongguaPlayerState extends State<DongguaPlayer> {
   void didUpdateWidget(DongguaPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.videoUrl != oldWidget.videoUrl && widget.videoUrl.isNotEmpty) {
+      _hasNotifiedReady = false; // 重置标志
       _changeVideo(widget.videoUrl);
     }
   }
@@ -80,33 +86,55 @@ class DongguaPlayerState extends State<DongguaPlayer> {
 
   void _initPlayer() {
     if (widget.videoUrl.isEmpty) return;
-    
+
+    final controller = VideoPlayerController.networkUrl(
+      Uri.parse(widget.videoUrl),
+    );
+
+    // 监听初始化完成事件
+    controller.addListener(() {
+      if (!_hasNotifiedReady &&
+          controller.value.isInitialized &&
+          widget.onPlayerReady != null) {
+        _hasNotifiedReady = true;
+        debugPrint('🎥 播放器初始化完成，触发 onPlayerReady 回调');
+        widget.onPlayerReady!();
+      }
+    });
+
     _flickManager = FlickManager(
-      videoPlayerController: VideoPlayerController.networkUrl(
-        Uri.parse(widget.videoUrl),
-      ),
+      videoPlayerController: controller,
       autoPlay: true,
       onVideoEnd: widget.onVideoEnd,
     );
-    
+
     if (mounted) setState(() {});
   }
 
   void _changeVideo(String url) {
+    final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+
+    // 监听初始化完成事件
+    controller.addListener(() {
+      if (!_hasNotifiedReady &&
+          controller.value.isInitialized &&
+          widget.onPlayerReady != null) {
+        _hasNotifiedReady = true;
+        debugPrint('🎥 播放器初始化完成，触发 onPlayerReady 回调');
+        widget.onPlayerReady!();
+      }
+    });
+
     if (_flickManager == null) {
       _flickManager = FlickManager(
-        videoPlayerController: VideoPlayerController.networkUrl(
-          Uri.parse(url),
-        ),
+        videoPlayerController: controller,
         autoPlay: true,
         onVideoEnd: widget.onVideoEnd,
       );
     } else {
-      _flickManager!.handleChangeVideo(
-        VideoPlayerController.networkUrl(Uri.parse(url)),
-      );
+      _flickManager!.handleChangeVideo(controller);
     }
-    
+
     if (mounted) setState(() {});
   }
 

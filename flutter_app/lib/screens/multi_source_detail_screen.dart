@@ -507,7 +507,7 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
         hasNext = _currentEpisodeIndex < episodes.length - 1;
       }
     }
-    
+
     return DongguaPlayer(
       key: _playerKey,
       videoUrl: _currentVideoUrl,
@@ -516,9 +516,25 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
       hasNextEpisode: hasNext,
       onNextEpisode: _playNextEpisode,
       onBack: () => Navigator.of(context).pop(),
+      onPlayerReady: _onPlayerReady, // 播放器初始化完成的回调
     );
   }
   
+  /// 播放器初始化完成的回调
+  void _onPlayerReady() {
+    debugPrint('🎥 收到播放器初始化完成通知');
+
+    // 如果需要恢复播放进度，现在执行
+    if (!_hasRestoredPosition && widget.initialPosition != null && widget.initialPosition!.inSeconds > 0) {
+      _hasRestoredPosition = true;
+      final player = _playerKey.currentState;
+      if (player != null) {
+        debugPrint('⏩ 恢复播放进度: ${widget.initialPosition}');
+        player.seekTo(widget.initialPosition!);
+      }
+    }
+  }
+
   /// 播放指定剧集
   void _playEpisode(int index) {
     debugPrint('🎬 _playEpisode called with index: $index');
@@ -526,14 +542,14 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
       debugPrint('⚠️ _playEpisode: _currentDetail is null or no playSources');
       return;
     }
-    
+
     final episodes = _currentDetail!.playSources.first.episodes;
     debugPrint('📋 Episodes count: ${episodes.length}');
     if (index >= episodes.length) {
       debugPrint('⚠️ _playEpisode: index $index >= episodes.length ${episodes.length}');
       return;
     }
-    
+
     final episode = episodes[index];
     debugPrint('▶️ Playing episode: ${episode.name}, URL: ${episode.url}');
     setState(() {
@@ -541,19 +557,7 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
       _currentVideoUrl = episode.url;
     });
     debugPrint('✅ _currentVideoUrl set to: $_currentVideoUrl');
-    
-    // 如果是从历史记录恢复，跳转到上次播放位置
-    if (!_hasRestoredPosition && widget.initialPosition != null && widget.initialPosition!.inSeconds > 0) {
-      _hasRestoredPosition = true;
-      // 延迟执行，等待播放器初始化
-      Future.delayed(const Duration(milliseconds: 1500), () {
-        if (mounted) {
-          debugPrint('⏩ 恢复播放进度: ${widget.initialPosition}');
-          _playerKey.currentState?.seekTo(widget.initialPosition!);
-        }
-      });
-    }
-    
+
     // 保存观看历史
     _saveWatchHistory(episode.name);
   }
@@ -561,7 +565,7 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen> {
   /// 播放下一集
   void _playNextEpisode() {
     if (_currentDetail == null || _currentDetail!.playSources.isEmpty) return;
-    
+
     final episodes = _currentDetail!.playSources.first.episodes;
     if (_currentEpisodeIndex < episodes.length - 1) {
       _playEpisode(_currentEpisodeIndex + 1);
