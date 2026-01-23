@@ -147,10 +147,10 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: flutter_app/dist
+          path: dist
 
       - name: Show downloaded files
-        run: ls -R flutter_app/dist
+        run: ls -R dist
 
       - name: Create GitHub Release & upload assets
         uses: softprops/action-gh-release@v2
@@ -160,9 +160,9 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            flutter_app/dist/android-artifacts/donggua_tv.apk
-            flutter_app/dist/android-artifacts/donggua_tv.aab
-            flutter_app/dist/macos-ios-artifacts/donggua_tv.dmg
-            flutter_app/dist/macos-ios-artifacts/donggua_tv.ipa
+            dist/android-artifacts/donggua_tv.apk
+            dist/android-artifacts/donggua_tv.aab
+            dist/macos-ios-artifacts/donggua_tv.dmg
+            dist/macos-ios-artifacts/donggua_tv.ipa
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
