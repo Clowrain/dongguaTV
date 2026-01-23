@@ -7,10 +7,10 @@ import '../blocs/blocs.dart';
 import '../config/theme.dart';
 import '../models/models.dart';
 import '../services/watch_history_service.dart';
-import 'widgets/home_hero_carousel.dart';
-import 'widgets/home_category_nav.dart';
-import 'widgets/home_media_card.dart';
-import 'widgets/home_history_card.dart';
+import '../widgets/screens/home_hero_carousel.dart';
+import '../widgets/screens/home_category_nav.dart';
+import '../widgets/screens/home_media_card.dart';
+import '../widgets/screens/home_history_card.dart';
 
 /// 首页
 class HomeScreen extends StatefulWidget {

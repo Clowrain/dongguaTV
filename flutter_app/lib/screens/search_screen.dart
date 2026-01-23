@@ -4,8 +4,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../blocs/blocs.dart';
 import '../config/theme.dart';
 import 'multi_source_detail_screen.dart';
-import 'widgets/search_history_list.dart';
-import 'widgets/search_result_card.dart';
+import '../widgets/screens/search_history_list.dart';
+import '../widgets/screens/search_result_card.dart';
 
 /// 搜索页
 class SearchScreen extends StatefulWidget {

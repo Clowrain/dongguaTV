@@ -8,7 +8,7 @@ import '../config/app_config.dart';
 import '../config/theme.dart';
 import '../models/models.dart';
 import '../services/services.dart';
-import '../widgets/donggua_player.dart';
+import '../widgets/player/player.dart';
 
 /// 多源详情页（从搜索结果点击进入）
 /// 显示多个视频源及其延迟，类似 web player-layout
