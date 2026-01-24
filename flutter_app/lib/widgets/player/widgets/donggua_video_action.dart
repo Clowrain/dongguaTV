@@ -247,6 +247,7 @@ class _DongguaVideoActionState extends State<DongguaVideoAction> {
 
   void _handleDoubleTap(Offset position) {
     final controlManager = Provider.of<FlickControlManager>(context, listen: false);
+    final displayManager = Provider.of<FlickDisplayManager>(context, listen: false);
 
     // 屏幕分为三区: 左40% | 中20% | 右40%
     final leftZone = _screenWidth * 0.4;
@@ -265,8 +266,10 @@ class _DongguaVideoActionState extends State<DongguaVideoAction> {
       // 双击快进后保存进度
       widget.onSeekComplete?.call();
     } else {
-      // 中间 - 播放/暂停切换（无需反馈）
+      // 中间 - 播放/暂停切换
       controlManager.togglePlay();
+      // 显示控制层，让用户看到播放按钮状态变化
+      displayManager.handleShowPlayerControls(showWithTimeout: true);
     }
   }
   
