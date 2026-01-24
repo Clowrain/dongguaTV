@@ -517,46 +517,52 @@ class _MultiSourceDetailScreenState extends State<MultiSourceDetailScreen>
           final playerHeight16x9 = screenWidth * 9 / 16;
           final playerHeight = playerHeight16x9.clamp(0.0, maxPlayerHeight);
 
-          return CustomScrollView(
-            slivers: [
+          // 使用 Column 将播放器区域和可滚动内容区域分离
+          // 这样播放器区域的手势不会影响下面的滚动
+          return Column(
+            children: [
               // 状态栏占位
-              SliverToBoxAdapter(
-                child: Container(color: Colors.black, height: statusBarHeight),
+              Container(color: Colors.black, height: statusBarHeight),
+
+              // 播放器区域 - 固定在顶部，不参与滚动
+              SizedBox(
+                height: playerHeight,
+                child: _buildPlayer(),
               ),
 
-              // 播放器区域
-              SliverToBoxAdapter(
-                child: SizedBox(height: playerHeight, child: _buildPlayer()),
-              ),
+              // 可滚动内容区域 - 只有这部分可以滚动
+              if (!isMobileFullscreen)
+                Expanded(
+                  child: CustomScrollView(
+                    slivers: [
+                      // 标题和操作区域
+                      SliverToBoxAdapter(child: _buildTitleSection()),
 
-              // 只在非全屏模式下显示内容
-              if (!isMobileFullscreen) ...[
-                // 标题和操作区域
-                SliverToBoxAdapter(child: _buildTitleSection()),
+                      // 主操作按钮
+                      SliverToBoxAdapter(child: _buildMainActions()),
 
-                // 主操作按钮
-                SliverToBoxAdapter(child: _buildMainActions()),
+                      // 线路选择
+                      SliverToBoxAdapter(child: _buildSourceSelector()),
 
-                // 线路选择
-                SliverToBoxAdapter(child: _buildSourceSelector()),
+                      const SliverToBoxAdapter(child: SizedBox(height: 12)),
 
-                const SliverToBoxAdapter(child: SizedBox(height: 12)),
+                      // 剧集列表
+                      if (_currentDetail != null &&
+                          _currentDetail!.playSources.isNotEmpty)
+                        SliverToBoxAdapter(child: _buildEpisodeGrid()),
 
-                // 剧集列表
-                if (_currentDetail != null &&
-                    _currentDetail!.playSources.isNotEmpty)
-                  SliverToBoxAdapter(child: _buildEpisodeGrid()),
+                      const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
-                const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                      // 简介（可展开/折叠）
+                      if (_currentDetail != null &&
+                          _currentDetail!.vodContent.isNotEmpty)
+                        SliverToBoxAdapter(child: _buildSynopsis()),
 
-                // 简介（可展开/折叠）
-                if (_currentDetail != null &&
-                    _currentDetail!.vodContent.isNotEmpty)
-                  SliverToBoxAdapter(child: _buildSynopsis()),
-
-                // 底部间距
-                const SliverToBoxAdapter(child: SizedBox(height: 100)),
-              ],
+                      // 底部间距
+                      const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                    ],
+                  ),
+                ),
             ],
           );
         },

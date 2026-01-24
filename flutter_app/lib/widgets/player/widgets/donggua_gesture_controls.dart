@@ -6,70 +6,31 @@ import 'package:screen_brightness/screen_brightness.dart';
 
 import '../player.dart';
 
-/// 自定义拖动手势识别器
-/// 只有在拖动超过阈值后才声明手势，否则让点击事件正常传递
-class _DelayedPanGestureRecognizer extends PanGestureRecognizer {
-  _DelayedPanGestureRecognizer({
-    required this.onDragStart,
-    required this.onDragUpdate,
-    required this.onDragEnd,
-    this.dragThreshold = 15.0,
-  });
-
-  final void Function(Offset position) onDragStart;
-  final void Function(Offset position, Offset delta) onDragUpdate;
-  final VoidCallback onDragEnd;
-  final double dragThreshold;
-
-  Offset? _startPosition;
-  bool _isDragging = false;
+/// 立即获胜的垂直拖动手势识别器
+/// 在 addPointer 阶段就声明手势，确保能战胜父级的滚动手势
+class _ImmediateVerticalDragGestureRecognizer extends VerticalDragGestureRecognizer {
+  _ImmediateVerticalDragGestureRecognizer({super.debugOwner});
 
   @override
   void addPointer(PointerDownEvent event) {
-    _startPosition = event.localPosition;
-    _isDragging = false;
+    // 立即声明这个手势，确保能在竞争中获胜
+    startTrackingPointer(event.pointer, event.transform);
+    resolve(GestureDisposition.accepted);
     super.addPointer(event);
   }
+}
+
+/// 立即获胜的水平拖动手势识别器
+class _ImmediateHorizontalDragGestureRecognizer extends HorizontalDragGestureRecognizer {
+  _ImmediateHorizontalDragGestureRecognizer({super.debugOwner});
 
   @override
-  void handleEvent(PointerEvent event) {
-    if (event is PointerMoveEvent && _startPosition != null) {
-      final delta = event.localPosition - _startPosition!;
-      
-      if (!_isDragging) {
-        // 检查是否超过阈值
-        if (delta.distance > dragThreshold) {
-          _isDragging = true;
-          onDragStart(_startPosition!);
-          // 声明手势
-          resolve(GestureDisposition.accepted);
-        }
-      }
-      
-      if (_isDragging) {
-        onDragUpdate(event.localPosition, delta);
-      }
-    } else if (event is PointerUpEvent || event is PointerCancelEvent) {
-      if (_isDragging) {
-        onDragEnd();
-      }
-      _isDragging = false;
-      _startPosition = null;
-    }
-    
-    super.handleEvent(event);
+  void addPointer(PointerDownEvent event) {
+    // 立即声明这个手势，确保能在竞争中获胜
+    startTrackingPointer(event.pointer, event.transform);
+    resolve(GestureDisposition.accepted);
+    super.addPointer(event);
   }
-
-  @override
-  void rejectGesture(int pointer) {
-    // 如果手势被拒绝，重置状态
-    _isDragging = false;
-    _startPosition = null;
-    super.rejectGesture(pointer);
-  }
-
-  @override
-  String get debugDescription => 'delayed pan';
 }
 
 /// 手势控制层
@@ -253,27 +214,50 @@ class _DongguaGestureControlsState extends State<DongguaGestureControls> {
       builder: (context, constraints) {
         _screenWidth = constraints.maxWidth;
         _screenHeight = constraints.maxHeight;
-        
+
+        // 使用立即获胜的手势识别器
+        // 在 addPointer 阶段就声明手势，确保能战胜父级的滚动手势
         return RawGestureDetector(
           gestures: {
-            _DelayedPanGestureRecognizer: GestureRecognizerFactoryWithHandlers<_DelayedPanGestureRecognizer>(
-              () => _DelayedPanGestureRecognizer(
-                onDragStart: _onDragStart,
-                onDragUpdate: _onDragUpdate,
-                onDragEnd: _onDragEnd,
-                dragThreshold: 15.0,
-              ),
-              (_DelayedPanGestureRecognizer instance) {
-                // 配置已在构造函数中完成
+            // 垂直拖动手势 - 用于与父级滚动竞争并立即获胜
+            _ImmediateVerticalDragGestureRecognizer: GestureRecognizerFactoryWithHandlers<_ImmediateVerticalDragGestureRecognizer>(
+              () => _ImmediateVerticalDragGestureRecognizer(debugOwner: this),
+              (_ImmediateVerticalDragGestureRecognizer instance) {
+                instance
+                  ..onStart = (details) {
+                    _onDragStart(details.localPosition);
+                  }
+                  ..onUpdate = (details) {
+                    _onDragUpdate(details.localPosition, details.delta);
+                  }
+                  ..onEnd = (details) {
+                    _onDragEnd();
+                  };
+              },
+            ),
+            // 水平拖动手势 - 用于进度调节
+            _ImmediateHorizontalDragGestureRecognizer: GestureRecognizerFactoryWithHandlers<_ImmediateHorizontalDragGestureRecognizer>(
+              () => _ImmediateHorizontalDragGestureRecognizer(debugOwner: this),
+              (_ImmediateHorizontalDragGestureRecognizer instance) {
+                instance
+                  ..onStart = (details) {
+                    _onDragStart(details.localPosition);
+                  }
+                  ..onUpdate = (details) {
+                    _onDragUpdate(details.localPosition, details.delta);
+                  }
+                  ..onEnd = (details) {
+                    _onDragEnd();
+                  };
               },
             ),
           },
-          behavior: HitTestBehavior.translucent,
+          behavior: HitTestBehavior.opaque,
           child: Stack(
             children: [
               // 子组件（控制层）
               widget.child,
-              
+
               // 调节指示器
               if (_showIndicator)
                 IgnorePointer(
