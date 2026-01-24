@@ -4,36 +4,36 @@ import 'package:video_player/video_player.dart';
 import 'player.dart';
 
 /// 东瓜TV 视频播放器组件
-/// 
+///
 /// 基于 FlickVideoPlayer，提供简化的 API 供视频详情页使用
 class DongguaPlayer extends StatefulWidget {
   /// 视频 URL
   final String videoUrl;
-  
+
   /// 视频标题
   final String title;
-  
+
   /// 当前剧集名
   final String episodeName;
-  
+
   /// 是否有下一集
   final bool hasNextEpisode;
-  
+
   /// 下一集回调
   final VoidCallback? onNextEpisode;
-  
+
   /// 返回回调
   final VoidCallback? onBack;
-  
+
   /// 更多选项回调
   final VoidCallback? onMoreOptions;
-  
+
   /// 视频结束回调
   final VoidCallback? onVideoEnd;
-  
+
   /// 手势开始时回调（父级应禁用滚动）
   final VoidCallback? onGestureStart;
-  
+
   /// 手势结束时回调（父级应恢复滚动）
   final VoidCallback? onGestureEnd;
 
@@ -143,24 +143,29 @@ class DongguaPlayerState extends State<DongguaPlayer> {
   }
 
   // ========== 公开方法 ==========
-  
+
   void play() => _flickManager?.flickControlManager?.play();
   void pause() => _flickManager?.flickControlManager?.pause();
   void togglePlayPause() => _flickManager?.flickControlManager?.togglePlay();
-  void seekTo(Duration position) => _flickManager?.flickControlManager?.seekTo(position);
-  void setPlaybackSpeed(double speed) => _flickManager?.flickControlManager?.setPlaybackSpeed(speed);
-  void setVolume(double volume) => _flickManager?.flickControlManager?.setVolume(volume);
-  
+  void seekTo(Duration position) =>
+      _flickManager?.flickControlManager?.seekTo(position);
+  void setPlaybackSpeed(double speed) =>
+      _flickManager?.flickControlManager?.setPlaybackSpeed(speed);
+  void setVolume(double volume) =>
+      _flickManager?.flickControlManager?.setVolume(volume);
+
   /// 获取当前播放位置
-  Duration get currentPosition => 
-      _flickManager?.flickVideoManager?.videoPlayerValue?.position ?? Duration.zero;
-  
+  Duration get currentPosition =>
+      _flickManager?.flickVideoManager?.videoPlayerValue?.position ??
+      Duration.zero;
+
   /// 获取视频总时长
-  Duration get duration => 
-      _flickManager?.flickVideoManager?.videoPlayerValue?.duration ?? Duration.zero;
-  
+  Duration get duration =>
+      _flickManager?.flickVideoManager?.videoPlayerValue?.duration ??
+      Duration.zero;
+
   /// 是否正在播放
-  bool get isPlaying => 
+  bool get isPlaying =>
       _flickManager?.flickVideoManager?.videoPlayerValue?.isPlaying ?? false;
 
   @override
@@ -172,7 +177,7 @@ class DongguaPlayerState extends State<DongguaPlayer> {
           // 使用屏幕宽度计算 16:9 高度
           final width = constraints.maxWidth;
           final height = width * 9 / 16;
-          
+
           return Container(
             width: width,
             height: height,
@@ -184,10 +189,14 @@ class DongguaPlayerState extends State<DongguaPlayer> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.play_circle_outline, color: Colors.white38, size: 48),
+                      Icon(
+                        Icons.play_circle_outline,
+                        color: Colors.white38,
+                        size: 48,
+                      ),
                       SizedBox(height: 8),
                       Text(
-                        '请选择剧集开始播放',
+                        '请等待线路加载',
                         style: TextStyle(color: Colors.white38, fontSize: 13),
                       ),
                     ],
@@ -209,12 +218,18 @@ class DongguaPlayerState extends State<DongguaPlayer> {
                         ],
                       ),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 4,
+                    ),
                     child: Row(
                       children: [
                         if (widget.onBack != null)
                           IconButton(
-                            icon: const Icon(Icons.arrow_back, color: Colors.white),
+                            icon: const Icon(
+                              Icons.arrow_back,
+                              color: Colors.white,
+                            ),
                             onPressed: widget.onBack,
                           ),
                       ],
@@ -232,14 +247,14 @@ class DongguaPlayerState extends State<DongguaPlayer> {
       builder: (context, constraints) {
         // 使用视频实际比例或默认 16:9
         final videoValue = _flickManager?.flickVideoManager?.videoPlayerValue;
-        final aspectRatio = (videoValue?.isInitialized == true) 
-            ? videoValue!.aspectRatio 
+        final aspectRatio = (videoValue?.isInitialized == true)
+            ? videoValue!.aspectRatio
             : 16 / 9;
-        
+
         // 根据可用宽度计算高度
         final width = constraints.maxWidth;
         final height = width / aspectRatio;
-        
+
         return SizedBox(
           width: width,
           height: height,
@@ -247,19 +262,17 @@ class DongguaPlayerState extends State<DongguaPlayer> {
             flickManager: _flickManager!,
             onBack: widget.onBack,
             topBarRightWidget: widget.onMoreOptions != null
-              ? IconButton(
-                  icon: const Icon(Icons.more_vert, color: Colors.white),
-                  onPressed: widget.onMoreOptions,
-                )
-              : null,
+                ? IconButton(
+                    icon: const Icon(Icons.more_vert, color: Colors.white),
+                    onPressed: widget.onMoreOptions,
+                  )
+                : null,
             flickVideoWithControls: FlickVideoWithControls(
               videoFit: BoxFit.contain, // 保持视频原始比例，不裁剪
               controls: DongguaPortraitControls(
                 title: widget.title,
                 episodeName: widget.episodeName,
-                progressBarSettings: FlickProgressBarSettings(
-                  height: 4,
-                ),
+                progressBarSettings: FlickProgressBarSettings(height: 4),
                 onGestureStart: widget.onGestureStart,
                 onGestureEnd: widget.onGestureEnd,
                 onSeekComplete: widget.onSeekComplete,
