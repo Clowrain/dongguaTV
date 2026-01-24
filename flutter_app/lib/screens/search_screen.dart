@@ -141,6 +141,8 @@ class _SearchScreenState extends State<SearchScreen> {
         hintText: '搜索电影、剧集...',
         hintStyle: TextStyle(color: AppTheme.textSecondary),
         border: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        enabledBorder: InputBorder.none,
         isDense: true,
         contentPadding: EdgeInsets.zero,
       ),
