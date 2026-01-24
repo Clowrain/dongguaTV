@@ -7,11 +7,9 @@ import '../blocs/blocs.dart';
 import '../config/theme.dart';
 import '../models/models.dart';
 import '../services/watch_history_service.dart';
-import '../utils/platform_utils.dart';
 import '../widgets/screens/home_hero_carousel.dart';
 import '../widgets/screens/home_category_nav.dart';
 import '../widgets/screens/home_media_card.dart';
-import '../widgets/screens/tv_home_media_card.dart';
 import '../widgets/screens/home_history_card.dart';
 
 /// 首页
@@ -302,32 +300,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildMediaRow(List<TmdbMedia> items) {
-    // TV 平台使用更大的高度和间距
-    final scale = PlatformUtils.recommendedSpacingScale;
-    final height = PlatformUtils.isAndroidTV ? 280.0 : 200.0;
-
     return SliverToBoxAdapter(
       child: SizedBox(
-        height: height,
+        height: 200.0,
         child: ListView.builder(
           scrollDirection: Axis.horizontal,
-          padding: EdgeInsets.symmetric(horizontal: 12 * scale),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           itemCount: items.length,
           itemBuilder: (context, index) {
             final item = items[index];
 
-            // TV 平台使用优化的卡片
-            if (PlatformUtils.isAndroidTV) {
-              return TvHomeMediaCard(
-                media: item,
-                autofocus: index == 0,
-                onTap: () {
-                  context.push('/search?keyword=${Uri.encodeComponent(item.title)}');
-                },
-              );
-            }
-
-            // 移动平台使用标准卡片
             return HomeMediaCard(
               media: item,
               onTap: () {
@@ -342,7 +324,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildHistoryRow(List<WatchHistory> items) {
     return SizedBox(
-      height: 200,
+      height: 210, // 调整高度以适应 16:9 横向卡片 (157.5 + 标题 + 进度)
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12),

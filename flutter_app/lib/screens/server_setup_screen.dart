@@ -15,12 +15,10 @@ class ServerSetupScreen extends StatefulWidget {
 
 class _ServerSetupScreenState extends State<ServerSetupScreen> {
   final _controller = TextEditingController();
-  final _focusNode = FocusNode();
 
   @override
   void dispose() {
     _controller.dispose();
-    _focusNode.dispose();
     super.dispose();
   }
 
@@ -90,7 +88,6 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
                 const SizedBox(height: 8),
                 TextField(
                   controller: _controller,
-                  focusNode: _focusNode,
                   style: const TextStyle(color: AppTheme.textPrimary),
                   keyboardType: TextInputType.url,
                   textInputAction: TextInputAction.done,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../config/theme.dart';
 import '../models/watch_history.dart';
@@ -61,20 +62,22 @@ class HistoryScreen extends StatelessWidget {
           
           return LayoutBuilder(
             builder: (context, constraints) {
-              // 响应式列数
-              final columns = constraints.maxWidth < 600 
-                  ? 2 
-                  : constraints.maxWidth < 900 
-                      ? 3 
-                      : 4;
-              
+              // 根据屏幕宽度动态计算列数
+              // Netflix 风格：更宽松的间距
+              const minCardWidth = 140.0; // 增加最小卡片宽度
+              final availableWidth = constraints.maxWidth - 24; // 减去左右 padding (12 * 2)
+              final columns = (availableWidth / minCardWidth).floor().clamp(2, 6);
+
+              // 保持 2:3 宽高比
+              const aspectRatio = 2 / 3;
+
               return GridView.builder(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(12),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: columns,
-                  mainAxisSpacing: 16,
-                  crossAxisSpacing: 16,
-                  childAspectRatio: 0.65,
+                  mainAxisSpacing: 20, // 增加垂直间距
+                  crossAxisSpacing: 12, // 保持水平间距
+                  childAspectRatio: aspectRatio,
                 ),
                 itemCount: histories.length,
                 itemBuilder: (context, index) {
@@ -155,7 +158,7 @@ class HistoryScreen extends StatelessWidget {
   }
 }
 
-/// 历史记录网格卡片
+/// 历史记录网格卡片 - Netflix 风格
 class _HistoryGridCard extends StatelessWidget {
   final WatchHistory history;
   final VoidCallback onTap;
@@ -175,83 +178,172 @@ class _HistoryGridCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 封面图
+          // 海报
           Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                color: AppTheme.surfaceColor,
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // 封面
-                  history.vodPic.isNotEmpty
-                      ? Image.network(
-                          history.vodPic,
+            child: Stack(
+              children: [
+                // 背景图片
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: history.vodPic.isNotEmpty
+                      ? CachedNetworkImage(
+                          imageUrl: history.vodPic,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => _buildPlaceholder(),
+                          width: double.infinity,
+                          height: double.infinity,
+                          placeholder: (_, __) => Container(
+                            color: AppTheme.surfaceColor,
+                            child: const Center(
+                              child: CircularProgressIndicator(
+                                color: AppTheme.accentColor,
+                                strokeWidth: 2,
+                              ),
+                            ),
+                          ),
+                          errorWidget: (_, __, ___) => Container(
+                            color: AppTheme.surfaceColor,
+                            child: const Icon(
+                              Icons.movie_outlined,
+                              color: AppTheme.textSecondary,
+                              size: 40,
+                            ),
+                          ),
                         )
-                      : _buildPlaceholder(),
-                  // 剧集标签
-                  Positioned(
-                    bottom: 8,
-                    left: 8,
+                      : Container(
+                          color: AppTheme.surfaceColor,
+                          child: const Icon(
+                            Icons.movie_outlined,
+                            color: AppTheme.textSecondary,
+                            size: 40,
+                          ),
+                        ),
+                ),
+
+                // 底部渐变遮罩
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(6),
+                      bottomRight: Radius.circular(6),
+                    ),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      height: 50,
                       decoration: BoxDecoration(
-                        color: Colors.black.withAlpha(180),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        history.episodeName,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Colors.white,
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.85),
+                          ],
                         ),
                       ),
                     ),
                   ),
-                ],
-              ),
+                ),
+
+                // 进度条
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(6),
+                      bottomRight: Radius.circular(6),
+                    ),
+                    child: LinearProgressIndicator(
+                      value: history.progressPercent,
+                      backgroundColor: Colors.grey.shade800,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        AppTheme.accentColor,
+                      ),
+                      minHeight: 3,
+                    ),
+                  ),
+                ),
+
+                // 集数标签（左上角）
+                if (history.episodeName.isNotEmpty)
+                  Positioned(
+                    top: 6,
+                    left: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.8),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        history.episodeName,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // 线路标识（右上角）
+                if (history.siteName.isNotEmpty)
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.accentColor,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        history.siteName,
+                        style: const TextStyle(
+                          fontSize: 9,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           // 标题
           Text(
             history.vodName,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 4),
-          // 来源
-          Text(
-            history.siteName,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 11,
-              color: AppTheme.textSecondary,
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppTheme.textPrimary,
+              fontWeight: FontWeight.w500,
             ),
           ),
+          // 进度文本
+          if (history.progressPercent > 0)
+            Text(
+              '${(history.progressPercent * 100).toInt()}%',
+              style: TextStyle(
+                fontSize: 10,
+                color: AppTheme.textSecondary.withValues(alpha: 0.7),
+              ),
+            ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildPlaceholder() {
-    return Container(
-      color: AppTheme.surfaceColor,
-      child: Icon(
-        Icons.movie_outlined,
-        size: 32,
-        color: AppTheme.textSecondary.withAlpha(100),
       ),
     );
   }

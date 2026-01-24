@@ -10,6 +10,7 @@ class FlickVideoProgressBar extends StatelessWidget {
     this.onDragEnd,
     this.onDragStart,
     this.onDragUpdate,
+    this.onTap,
     FlickProgressBarSettings? flickProgressBarSettings,
   }) : flickProgressBarSettings = flickProgressBarSettings != null
             ? flickProgressBarSettings
@@ -19,6 +20,7 @@ class FlickVideoProgressBar extends StatelessWidget {
   final Function()? onDragStart;
   final Function()? onDragEnd;
   final Function()? onDragUpdate;
+  final Function()? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -88,6 +90,11 @@ class FlickVideoProgressBar extends StatelessWidget {
             return;
           }
           seekToRelativePosition(details.globalPosition);
+
+          // 点击进度条后也需要保存进度
+          if (onTap != null) {
+            onTap!();
+          }
         },
       );
     });

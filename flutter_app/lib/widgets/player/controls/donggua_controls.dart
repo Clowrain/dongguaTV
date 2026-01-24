@@ -32,6 +32,8 @@ class DongguaPortraitControls extends StatelessWidget {
     // 手势回调
     this.onGestureStart,
     this.onGestureEnd,
+    // 进度条拖动回调
+    this.onSeekComplete,
   });
 
   final double iconSize;
@@ -41,27 +43,30 @@ class DongguaPortraitControls extends StatelessWidget {
   final VoidCallback? onBack;
   final VoidCallback? onMoreOptions;
   final FlickProgressBarSettings? progressBarSettings;
-  
+
   /// 顶部左侧插槽（默认返回按钮）
   final Widget? topLeftSlot;
-  
+
   /// 顶部右侧插槽（默认更多选项按钮）
   final Widget? topRightSlot;
-  
+
   /// 中央插槽（默认播放/暂停按钮）
   final Widget? centerSlot;
-  
+
   /// 底部插槽（默认进度条和控制按钮）
   final Widget? bottomSlot;
-  
+
   /// 浮层插槽（弹幕、字幕等）
   final Widget? overlaySlot;
-  
+
   /// 手势开始时回调（父级应禁用滚动）
   final VoidCallback? onGestureStart;
-  
+
   /// 手势结束时回调（父级应恢复滚动）
   final VoidCallback? onGestureEnd;
+
+  /// 进度条拖动完成回调
+  final VoidCallback? onSeekComplete;
 
   @override
   Widget build(BuildContext context) {
@@ -87,6 +92,7 @@ class DongguaPortraitControls extends StatelessWidget {
           child: DongguaVideoAction(
             onGestureStart: onGestureStart,
             onGestureEnd: onGestureEnd,
+            onSeekComplete: onSeekComplete, // 手势调整进度后保存
             child: Center(
               child: FlickVideoBuffer(
                 child: FlickAutoHideChild(
@@ -165,6 +171,8 @@ class DongguaPortraitControls extends StatelessWidget {
                     flickProgressBarSettings: progressBarSettings ?? FlickProgressBarSettings(
                       height: 4,
                     ),
+                    onDragEnd: onSeekComplete,
+                    onTap: onSeekComplete, // 点击进度条时也保存进度
                   ),
                   const SizedBox(height: 4),
                   Row(
@@ -211,17 +219,21 @@ class DongguaLandscapeControls extends StatelessWidget {
     this.onBack,
     this.onGestureStart,
     this.onGestureEnd,
+    this.onSeekComplete,
   });
 
   final String title;
   final String episodeName;
   final VoidCallback? onBack;
-  
+
   /// 手势开始时回调
   final VoidCallback? onGestureStart;
-  
+
   /// 手势结束时回调
   final VoidCallback? onGestureEnd;
+
+  /// 进度条拖动完成回调
+  final VoidCallback? onSeekComplete;
 
   @override
   Widget build(BuildContext context) {
@@ -232,6 +244,7 @@ class DongguaLandscapeControls extends StatelessWidget {
           child: DongguaVideoAction(
             onGestureStart: onGestureStart,
             onGestureEnd: onGestureEnd,
+            onSeekComplete: onSeekComplete, // 手势调整进度后保存
             child: Center(
               child: FlickVideoBuffer(
                 child: FlickAutoHideChild(
@@ -346,6 +359,8 @@ class DongguaLandscapeControls extends StatelessWidget {
                     flickProgressBarSettings: FlickProgressBarSettings(
                       height: 5,
                     ),
+                    onDragEnd: onSeekComplete,
+                    onTap: onSeekComplete, // 点击进度条时也保存进度
                   ),
                   const SizedBox(height: 8),
                   Row(

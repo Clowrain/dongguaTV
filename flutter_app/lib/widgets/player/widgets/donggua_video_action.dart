@@ -21,16 +21,20 @@ class DongguaVideoAction extends StatefulWidget {
     this.seekDuration = const Duration(seconds: 10),
     this.onGestureStart,
     this.onGestureEnd,
+    this.onSeekComplete,
   });
 
   final Widget? child;
   final Duration seekDuration;
-  
+
   /// 手势开始时回调，父级应禁用滚动
   final VoidCallback? onGestureStart;
-  
+
   /// 手势结束时回调，父级应恢复滚动
   final VoidCallback? onGestureEnd;
+
+  /// 进度调整完成回调，用于保存播放进度
+  final VoidCallback? onSeekComplete;
 
   @override
   State<DongguaVideoAction> createState() => _DongguaVideoActionState();
@@ -179,15 +183,17 @@ class _DongguaVideoActionState extends State<DongguaVideoAction> {
     if (_isDragging) {
       // 通知父级恢复滚动
       widget.onGestureEnd?.call();
-      
+
       // 拖动结束
       if (_dragDirection == 'horizontal' && _adjustType == 'seek') {
         if (_videoDuration.inMilliseconds > 0) {
           final controlManager = Provider.of<FlickControlManager>(context, listen: false);
           controlManager.seekTo(_seekPosition);
+          // 水平拖动调整进度后保存
+          widget.onSeekComplete?.call();
         }
       }
-      
+
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted) {
           setState(() => _showIndicator = false);
@@ -241,19 +247,23 @@ class _DongguaVideoActionState extends State<DongguaVideoAction> {
 
   void _handleDoubleTap(Offset position) {
     final controlManager = Provider.of<FlickControlManager>(context, listen: false);
-    
+
     // 屏幕分为三区: 左40% | 中20% | 右40%
     final leftZone = _screenWidth * 0.4;
     final rightZone = _screenWidth * 0.6;
-    
+
     if (position.dx < leftZone) {
       // 左侧 - 快退
       controlManager.seekBackward(widget.seekDuration);
       _showDoubleTapFeedback('backward');
+      // 双击快退后保存进度
+      widget.onSeekComplete?.call();
     } else if (position.dx > rightZone) {
       // 右侧 - 快进
       controlManager.seekForward(widget.seekDuration);
       _showDoubleTapFeedback('forward');
+      // 双击快进后保存进度
+      widget.onSeekComplete?.call();
     } else {
       // 中间 - 播放/暂停切换（无需反馈）
       controlManager.togglePlay();

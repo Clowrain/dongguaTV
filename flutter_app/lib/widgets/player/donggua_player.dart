@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
-import '../../utils/platform_utils.dart';
 import 'player.dart';
 
 /// 东瓜TV 视频播放器组件
@@ -41,6 +40,9 @@ class DongguaPlayer extends StatefulWidget {
   /// 播放器初始化完成回调（可用于恢复播放进度）
   final VoidCallback? onPlayerReady;
 
+  /// 进度条拖动完成回调（可用于保存播放进度）
+  final VoidCallback? onSeekComplete;
+
   const DongguaPlayer({
     super.key,
     required this.videoUrl,
@@ -54,6 +56,7 @@ class DongguaPlayer extends StatefulWidget {
     this.onGestureStart,
     this.onGestureEnd,
     this.onPlayerReady,
+    this.onSeekComplete,
   });
 
   @override
@@ -259,24 +262,18 @@ class DongguaPlayerState extends State<DongguaPlayer> {
                 ),
                 onGestureStart: widget.onGestureStart,
                 onGestureEnd: widget.onGestureEnd,
+                onSeekComplete: widget.onSeekComplete,
               ),
             ),
             flickVideoWithControlsFullscreen: FlickVideoWithControls(
               videoFit: BoxFit.contain, // 全屏也保持原始比例
-              controls: PlatformUtils.isAndroidTV
-                  ? DongguaTvControls(
-                      title: widget.title,
-                      episodeName: widget.episodeName,
-                      onBack: widget.onBack,
-                      hasNextEpisode: widget.hasNextEpisode,
-                      onNextEpisode: widget.onNextEpisode,
-                    )
-                  : DongguaLandscapeControls(
-                      title: widget.title,
-                      episodeName: widget.episodeName,
-                      onGestureStart: widget.onGestureStart,
-                      onGestureEnd: widget.onGestureEnd,
-                    ),
+              controls: DongguaLandscapeControls(
+                title: widget.title,
+                episodeName: widget.episodeName,
+                onGestureStart: widget.onGestureStart,
+                onGestureEnd: widget.onGestureEnd,
+                onSeekComplete: widget.onSeekComplete,
+              ),
             ),
           ),
         );

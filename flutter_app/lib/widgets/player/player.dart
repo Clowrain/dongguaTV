@@ -11,8 +11,7 @@ export 'controls/flick_video_with_controls.dart';
 export 'controls/flick_portrait_controls.dart';
 export 'controls/flick_landscape_controls.dart';
 export 'controls/donggua_controls.dart';
-export 'controls/donggua_tv_controls.dart';
-
+ 
 // Utils
 export 'utils/flick_manager_builder.dart';
 export 'utils/web_key_bindings.dart';
