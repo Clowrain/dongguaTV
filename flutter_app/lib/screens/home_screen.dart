@@ -127,7 +127,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // 分类导航栏
           SliverToBoxAdapter(
-            child: HomeCategoryNav(sectionKeys: _sectionKeys),
+            child: HomeCategoryNav(),
           ),
 
           // 继续观看

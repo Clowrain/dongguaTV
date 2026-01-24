@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../config/theme.dart';
+import '../../blocs/home/home_bloc.dart';
 
 /// 分类数据（包含锚点 key，与 web rowConfigs 一致）
 const List<Map<String, dynamic>> categoryData = [
@@ -27,22 +29,53 @@ const List<Map<String, dynamic>> categoryData = [
 
 /// 分类导航栏
 class HomeCategoryNav extends StatelessWidget {
-  final Map<String, GlobalKey> sectionKeys;
+  const HomeCategoryNav({super.key});
 
-  const HomeCategoryNav({
-    super.key,
-    required this.sectionKeys,
-  });
+  /// 分类 key 到 rowConfig key 的映射
+  static const Map<String, String> _categoryToRowKey = {
+    'movie': 'movieRow',
+    'tv': 'tvRow',
+    'cn': 'cnRow',
+    'us': 'usRow',
+    'krjp': 'krjpRow',
+    'anime': 'animeRow',
+    'scifi': 'scifiRow',
+    'action': 'actionRow',
+    'comedy': 'comedyRow',
+    'crime': 'crimeRow',
+    'romance': 'romanceRow',
+    'family': 'familyRow',
+    'doc': 'docRow',
+    'war': 'warRow',
+    'horror': 'horrorRow',
+    'mystery': 'mysteryRow',
+    'fantasy': 'fantasyRow',
+    'variety': 'varietyRow',
+    'history': 'historyRow',
+  };
 
-  void _scrollToSection(GlobalKey key) {
-    final context = key.currentContext;
-    if (context != null) {
-      Scrollable.ensureVisible(
-        context,
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeInOut,
-      );
-    }
+  void _navigateToCategory(BuildContext context, String categoryKey, String categoryName) {
+    final rowKey = _categoryToRowKey[categoryKey];
+    if (rowKey == null) return;
+
+    final config = HomeBloc.rowConfigs[rowKey];
+    if (config == null) return;
+
+    final path = config['path'] ?? '';
+    final params = config['params'] ?? '';
+    final sortMode = config['sortMode'];
+    final title = config['title'] ?? categoryName;
+
+    final uri = Uri(
+      path: '/category/$categoryKey',
+      queryParameters: {
+        'title': title,
+        'path': path,
+        if (params.isNotEmpty) 'params': params,
+        if (sortMode != null) 'sortMode': sortMode,
+      },
+    );
+    context.push(uri.toString());
   }
 
   @override
@@ -57,14 +90,15 @@ class HomeCategoryNav extends StatelessWidget {
           itemCount: categoryData.length,
           itemBuilder: (context, index) {
             final cat = categoryData[index];
-            final sectionKey = cat['key'] as String;
+            final categoryKey = cat['key'] as String;
+            final categoryName = cat['name'] as String;
             return _CategoryItem(
-              name: cat['name'] as String,
+              name: categoryName,
               icon: cat['icon'] as IconData,
               colors: (cat['colors'] as List<int>).map((c) => Color(c)).toList(),
               onTap: () {
-                // 滚动到对应区块
-                _scrollToSection(sectionKeys[sectionKey]!);
+                // 跳转到分类详情页
+                _navigateToCategory(context, categoryKey, categoryName);
               },
             );
           },
